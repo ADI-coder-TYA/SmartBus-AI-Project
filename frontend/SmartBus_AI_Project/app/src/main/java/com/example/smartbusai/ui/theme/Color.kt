@@ -1,4 +1,4 @@
-package com.example.smartbus_ai_project.ui.theme
+package com.example.smartbusai.ui.theme
 
 import androidx.compose.ui.graphics.Color
 

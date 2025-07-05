@@ -1,4 +1,4 @@
-package com.example.smartbus_ai_project
+package com.example.smartbusai
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -10,19 +10,23 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.example.smartbus_ai_project.ui.theme.SmartBus_AI_ProjectTheme
+import com.example.smartbusai.ui.home.HomeScreen
+import com.example.smartbusai.ui.theme.SmartBus_AI_ProjectTheme
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    private val PLACES_API_KEY = BuildConfig.PLACES_API_KEY
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             SmartBus_AI_ProjectTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
-                    Basic(
-                        modifier = Modifier.padding(innerPadding)
-                    )
-                }
+                HomeScreen(
+                    apiKey = PLACES_API_KEY
+                )
             }
         }
     }

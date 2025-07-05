@@ -1,6 +1,5 @@
-package com.example.smartbus_ai_project.ui.theme
+package com.example.smartbusai.ui.theme
 
-import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme

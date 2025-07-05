@@ -1,4 +1,4 @@
-package com.example.smartbus_ai_project
+package com.example.smartbusai
 
 import org.junit.Test
 

@@ -1,4 +1,4 @@
-package com.example.smartbus_ai_project
+package com.example.smartbusai
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4

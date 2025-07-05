@@ -1,11 +1,28 @@
+val localPropertiesFile = File(rootDir, "local.properties")
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.forEachLine { line ->
+        if (line.isNotBlank() && !line.startsWith("#") && line.contains("=")) {
+            val parts = line.split("=")
+            val key = parts[0].trim()
+            val value = parts.subList(1, parts.size).joinToString("=").trim()
+            if (key == "PLACES_API_KEY") {
+                project.extra.set("PLACES_API_KEY", value)
+            }
+        }
+    }
+}
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.devtools.ksp")
+    id("org.jetbrains.kotlin.kapt")
+    id("com.google.dagger.hilt.android")
 }
 
 android {
-    namespace = "com.example.smartbus_ai_project"
+    namespace = "com.example.smartbusai"
     compileSdk = 35
 
     defaultConfig {
@@ -16,11 +33,13 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "PLACES_API_KEY", "\"${project.properties["PLACES_API_KEY"]}\"")
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -35,11 +54,20 @@ android {
         jvmTarget = "11"
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
 
 dependencies {
+    //Dagger - Hilt
+    implementation("com.google.dagger:hilt-android:2.56.2")
+    kapt("com.google.dagger:hilt-android-compiler:2.56.2")
+    implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
+
+    //Retrofit & Gson Converter
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
