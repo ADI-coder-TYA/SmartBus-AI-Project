@@ -1,7 +1,6 @@
 package com.example.smartbusai.ui.home
 
 import android.util.Log
-import com.example.smartbusai.viewmodels.SearchViewModel
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -28,13 +27,18 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavController
+import androidx.navigation.compose.rememberNavController
+import com.example.smartbusai.constants.Constants
+import com.example.smartbusai.viewmodels.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Preview
 @Composable
 fun HomeScreen(
+    navController: NavController = rememberNavController(),
     searchViewModel: SearchViewModel = hiltViewModel(),
-    apiKey: String = ""
+    apiKey: String = Constants.PLACES_API_KEY
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val predictions by searchViewModel.results.collectAsState()
@@ -85,6 +89,7 @@ fun HomeScreen(
                         onClick = {
                             searchViewModel.updateQuery(prediction.description)
                             isExpanded = false
+                            navController.navigate("routeSelection/${prediction.description}")
                         }
                     )
                 }
@@ -98,8 +103,9 @@ private fun SearchItem(
     description: String,
     onClick: () -> Unit
 ) {
-    Row (
-        modifier = Modifier.fillMaxWidth()
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
             .padding(16.dp)
             .clickable {
                 onClick()
