@@ -88,6 +88,8 @@ fun HomeScreen(
                         description = prediction.description,
                         onClick = {
                             searchViewModel.updateQuery(prediction.description)
+                            searchViewModel.updateDeparture(prediction.description)
+                            searchViewModel.updateDepartureStopId(prediction.place_id)
                             isExpanded = false
                             navController.navigate("routeSelection/${prediction.description}")
                         }

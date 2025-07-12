@@ -11,4 +11,10 @@ interface GooglePlacesApi {
         @Query("types") types: String = "geocode",
         @Query("components") components: String = "country:in"
     ): GooglePlacesResponse
+
+    @GET("place/details/json")
+    suspend fun getPlaceDetails(
+        @Query("place_id") placeId: String,
+        @Query("key") apiKey: String
+    ): PlaceDetailsResponse
 }

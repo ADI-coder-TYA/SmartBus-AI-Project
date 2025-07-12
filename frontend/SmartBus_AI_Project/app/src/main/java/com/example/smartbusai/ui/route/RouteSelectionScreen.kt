@@ -288,8 +288,9 @@ fun RouteBox(
                                         SearchItem(prediction.description) {
                                             viewModel.updateIntermediateStop(
                                                 index,
-                                                prediction.description
+                                                prediction.description,
                                             )
+                                            viewModel.updateIntermediateStopPlaceId(index, prediction.place_id)
                                             expansionStates[index] = false
                                         }
                                     }
@@ -350,6 +351,7 @@ fun RouteBox(
                             val prediction = predictions[index]
                             SearchItem(prediction.description) {
                                 viewModel.updateDestination(prediction.description)
+                                viewModel.updateDestinationStopId(prediction.place_id)
                                 viewModel.updateQuery(prediction.description)
                                 expandedDestination = false
                             }
