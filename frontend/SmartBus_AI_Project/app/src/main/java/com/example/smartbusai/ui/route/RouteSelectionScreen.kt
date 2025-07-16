@@ -41,6 +41,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.currentCompositionLocalContext
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -52,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +65,7 @@ import androidx.navigation.NavController
 import androidx.navigation.compose.rememberNavController
 import com.example.smartbusai.R
 import com.example.smartbusai.constants.Constants
+import com.example.smartbusai.helperscripts.OnProceedButtonPressed
 import com.example.smartbusai.placesAPI.Prediction
 import com.example.smartbusai.viewmodels.SearchViewModel
 
@@ -74,7 +77,7 @@ fun RouteSelectionScreen(
     navController: NavController = rememberNavController()
 ) {
     val predictions by searchViewModel.results.collectAsState()
-
+    val context = LocalContext.current
     Scaffold(
         containerColor = Color.White,
         topBar = {
@@ -115,7 +118,7 @@ fun RouteSelectionScreen(
                         containerColor = Color(0xFF008800)
                     ),
                     shape = RectangleShape,
-                    onClick = {}
+                    onClick = { OnProceedButtonPressed(context) }
                 ) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
