@@ -1,6 +1,5 @@
 package com.example.smartbusai.ui.home
 
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -26,19 +25,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
-import com.example.smartbusai.constants.Constants
 import com.example.smartbusai.viewmodels.SearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
-@Preview
 @Composable
 fun HomeScreen(
-    navController: NavController = rememberNavController(),
-    searchViewModel: SearchViewModel = hiltViewModel(),
-    apiKey: String = Constants.PLACES_API_KEY
+    navController: NavController,
+    searchViewModel: SearchViewModel,
+    apiKey: String
 ) {
     var isExpanded by remember { mutableStateOf(false) }
     val predictions by searchViewModel.results.collectAsState()
@@ -46,9 +41,7 @@ fun HomeScreen(
     Scaffold { innerPadding ->
         SearchBar(
             expanded = isExpanded,
-            onExpandedChange = {
-                isExpanded = it
-            },
+            onExpandedChange = { isExpanded = it },
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxWidth()
@@ -60,9 +53,7 @@ fun HomeScreen(
                     query = searchViewModel.query.value,
                     onQueryChange = {
                         searchViewModel.updateQuery(it)
-                        searchViewModel.searchPlaces(searchViewModel.query.value, apiKey)
-                        Log.d("HomeScreen", "Query: ${searchViewModel.query.value}")
-                        Log.d("HomeScreen", "Results: ${searchViewModel.results.value}")
+                        searchViewModel.searchPlaces(it, apiKey)
                     },
                     leadingIcon = {
                         Icon(
@@ -75,11 +66,9 @@ fun HomeScreen(
                         searchViewModel.searchPlaces(searchViewModel.query.value, apiKey)
                     },
                     expanded = isExpanded,
-                    onExpandedChange = {
-                        isExpanded = it
-                    }
+                    onExpandedChange = { isExpanded = it }
                 )
-            },
+            }
         ) {
             LazyColumn {
                 items(predictions.size) { index ->
@@ -88,10 +77,12 @@ fun HomeScreen(
                         description = prediction.description,
                         onClick = {
                             searchViewModel.updateQuery(prediction.description)
-                            searchViewModel.updateDeparture(prediction.description)
-                            searchViewModel.updateDepartureStopId(prediction.place_id)
+                            searchViewModel.updateDeparture(
+                                description = prediction.description,
+                                placeId = prediction.place_id
+                            )
                             isExpanded = false
-                            navController.navigate("routeSelection/${prediction.description}")
+                            navController.navigate("routeSelection")
                         }
                     )
                 }

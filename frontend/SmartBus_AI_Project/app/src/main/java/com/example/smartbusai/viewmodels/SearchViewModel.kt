@@ -12,10 +12,18 @@ import com.example.smartbusai.placesAPI.Location
 import com.example.smartbusai.placesAPI.PlacesApiRetrofitClient
 import com.example.smartbusai.placesAPI.Prediction
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+
+data class PlaceDetails(
+    val description: String,
+    val placeId: String
+)
 
 @HiltViewModel
 class SearchViewModel @Inject constructor(
@@ -28,40 +36,36 @@ class SearchViewModel @Inject constructor(
     private val _results = MutableStateFlow<List<Prediction>>(emptyList())
     val results: StateFlow<List<Prediction>> = _results
 
-    private val intermediateStopIds = mutableListOf<String>()
-    private val departureStopId = mutableStateOf<String?>(null)
-    private val destinationStopId = mutableStateOf<String?>(null)
-
-    var selectedDeparture = mutableStateOf(savedStateHandle.get<String>("departureLocation"))
+    var selectedDeparture = mutableStateOf<PlaceDetails?>(null)
         private set
 
     var selectedDestination = mutableStateOf("")
         private set
 
+    private val _placeLatLngMap = MutableStateFlow<Map<String, Location>>(emptyMap())
+    val placeLatLngMap: StateFlow<Map<String, Location>> = _placeLatLngMap
+
+    private val intermediateStopIds = mutableListOf<String>()
+    private val departureStopId = mutableStateOf<String?>(null)
+    private val destinationStopId = mutableStateOf<String?>(null)
+    val intermediateStops = mutableStateListOf<String>()
+
     fun updateQuery(newQuery: String) {
         _query.value = newQuery
     }
 
-    var routeGeocodeList = mutableStateListOf<Location>()
-        private set
+    fun updateDeparture(description: String, placeId: String) {
+        selectedDeparture.value = PlaceDetails(description, placeId)
+        departureStopId.value = placeId
+    }
 
     fun updateDestination(newDestination: String) {
         selectedDestination.value = newDestination
     }
 
-    fun updateDeparture(newDeparture: String) {
-        selectedDeparture.value = newDeparture
-    }
-
-    fun updateDepartureStopId(newId: String) {
-        departureStopId.value = newId
-    }
-
     fun updateDestinationStopId(newId: String) {
         destinationStopId.value = newId
     }
-
-    val intermediateStops = mutableStateListOf<String>()
 
     fun updateIntermediateStop(index: Int, newText: String) {
         if (index in intermediateStops.indices) {
@@ -91,41 +95,52 @@ class SearchViewModel @Inject constructor(
 
     fun searchPlaces(query: String, apiKey: String) {
         viewModelScope.launch {
-            Log.d("SearchViewModel", "Fetching places for query: $query")
             try {
                 val response = PlacesApiRetrofitClient.api.getAutocomplete(query, apiKey)
                 if (response.status == "OK") {
                     _results.value = response.predictions
-                    Log.d("SearchViewModel", "Fetched ${response.predictions.size} places")
                 } else {
-                    Log.d("SearchViewModel", "Error fetching places: ${response.status}")
+                    Log.d("SearchViewModel", "Error: ${response.status}")
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e("SearchViewModel", "Search failed", e)
             }
         }
+    }
+
+    private suspend fun getLatLngFromPlaceId(placeId: String): Location {
+        val response = PlacesApiRetrofitClient.api.getPlaceDetails(
+            placeId = placeId,
+            apiKey = Constants.PLACES_API_KEY
+        )
+
+        val location = response.result?.geometry?.location
+            ?: throw IllegalStateException("No geometry found for placeId: $placeId")
+
+        return Location(location.lat, location.lng)
     }
 
     fun fetchLatLngFromPlaceId() {
         viewModelScope.launch {
             try {
-                val placeIdList =
-                    intermediateStopIds + departureStopId.value!! + destinationStopId.value!!
-                placeIdList.forEach { placeId ->
-                    val response =
-                        PlacesApiRetrofitClient.api.getPlaceDetails(
-                            placeId,
-                            Constants.PLACES_API_KEY
-                        )
-                    val location = response.result.geometry.location
-                    val lat = location.lat
-                    val lng = location.lng
-                    Log.d("SearchViewModel", "Fetched lat: $lat, lng: $lng for placeId: $placeId")
-                    routeGeocodeList.add(Location(lat = lat, lng = lng))
+                val deferredResults = mutableListOf<Deferred<Pair<String, Location>>>()
+
+                departureStopId.value?.let { depId ->
+                    deferredResults.add(async { depId to getLatLngFromPlaceId(depId) })
                 }
 
+                intermediateStopIds.forEach { stopId ->
+                    deferredResults.add(async { stopId to getLatLngFromPlaceId(stopId) })
+                }
+
+                destinationStopId.value?.let { destId ->
+                    deferredResults.add(async { destId to getLatLngFromPlaceId(destId) })
+                }
+
+                _placeLatLngMap.value = deferredResults.awaitAll().toMap()
+
             } catch (e: Exception) {
-                Log.e("SearchViewModel", "Failed to get lat/lng", e)
+                Log.e("SearchViewModel", "Error fetching coordinates", e)
             }
         }
     }

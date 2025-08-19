@@ -1,16 +1,18 @@
 package com.example.smartbusai.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.example.smartbusai.constants.Constants
 import com.example.smartbusai.ui.home.HomeScreen
+import com.example.smartbusai.ui.passengers.PassengerSelectionScreen
 import com.example.smartbusai.ui.route.RouteSelectionScreen
+import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
 
 @Composable
@@ -20,24 +22,45 @@ fun AppNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = startDestination
+        startDestination = "main_graph"
     ) {
-        composable("home") {
-            HomeScreen(
-                navController = navController,
-                searchViewModel = hiltViewModel<SearchViewModel>(),
-                apiKey = Constants.PLACES_API_KEY
-            )
-        }
-        composable(
-            route = "routeSelection/{departureLocation}",
-            arguments = listOf(
-                navArgument("departureLocation") {
-                    type = NavType.StringType
+        navigation(
+            startDestination = startDestination,
+            route = "main_graph"
+        ) {
+            composable("home") { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry("main_graph")
                 }
-            )) {
-            val searchViewModel = hiltViewModel<SearchViewModel>()
-            RouteSelectionScreen(searchViewModel, navController)
+                val searchViewModel: SearchViewModel = hiltViewModel(parentEntry)
+
+                HomeScreen(
+                    navController = navController,
+                    searchViewModel = searchViewModel,
+                    apiKey = Constants.PLACES_API_KEY
+                )
+            }
+
+            composable("routeSelection") { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry("main_graph")
+                }
+                val searchViewModel: SearchViewModel = hiltViewModel(parentEntry)
+
+                RouteSelectionScreen(
+                    searchViewModel = searchViewModel,
+                    navController = navController
+                )
+            }
+
+            composable("passengerSelection") { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry("main_graph")
+                }
+                val searchViewModel: SearchViewModel = hiltViewModel(parentEntry)
+                val passengerViewModel: PassengerViewModel = hiltViewModel(parentEntry)
+                PassengerSelectionScreen(searchViewModel = searchViewModel, passengerViewModel = passengerViewModel)
+            }
         }
     }
 }
