@@ -10,19 +10,81 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.example.smartbusai.viewmodels.LayoutViewModel
 import com.example.smartbusai.viewmodels.PassengerViewModel
+
+
+@Composable
+fun VehicleTypeScreen(
+    layoutViewModel: LayoutViewModel,
+    onProceed: () -> Unit
+) {
+    var selectedType by remember { mutableStateOf("Bus") }
+    var rows by remember { mutableStateOf("10") }
+    var cols by remember { mutableStateOf("4") }
+
+    Column(
+        Modifier.fillMaxSize().padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Text("Select Vehicle Type", style = MaterialTheme.typography.headlineSmall)
+
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("Bus", "Train").forEach { type ->
+                FilterChip(
+                    selected = selectedType == type,
+                    onClick = { selectedType = type },
+                    label = { Text(type) }
+                )
+            }
+        }
+
+        OutlinedTextField(
+            value = rows,
+            onValueChange = { rows = it },
+            label = { Text("Rows") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        OutlinedTextField(
+            value = cols,
+            onValueChange = { cols = it },
+            label = { Text("Columns") },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.weight(1f))
+        Button(
+            onClick = {
+                layoutViewModel.setLayout(rows.toInt(), cols.toInt(), selectedType)
+                onProceed()
+            },
+            modifier = Modifier.align(Alignment.End)
+        ) {
+            Text("Proceed")
+        }
+    }
+}
 
 @Composable
 fun SeatLayoutScreen(
@@ -31,9 +93,14 @@ fun SeatLayoutScreen(
     onConfirm: () -> Unit
 ) {
     val layout by layoutViewModel.layout.collectAsState()
+    val passengers by passengerViewModel.passengers.collectAsState()
+    var selectedSeat by remember { mutableStateOf<Seat?>(null) }
 
     Column(Modifier.fillMaxSize().padding(16.dp)) {
-        Text("Select Your Seats", style = MaterialTheme.typography.headlineSmall)
+        Text(
+            "Select Seats (${layout?.vehicleType})",
+            style = MaterialTheme.typography.headlineSmall
+        )
 
         Spacer(Modifier.height(12.dp))
 
@@ -47,15 +114,13 @@ fun SeatLayoutScreen(
                         (0 until l.cols).forEach { col ->
                             val seat = l.seats.first { it.row == row && it.col == col }
                             Button(
-                                onClick = {
-                                    // TODO: seat selection logic (assign to passenger later)
-                                },
+                                onClick = { selectedSeat = seat },
                                 colors = ButtonDefaults.buttonColors(
                                     if (seat.isReserved) Color.Gray else Color.Green
                                 ),
                                 modifier = Modifier.size(50.dp)
                             ) {
-                                Text(seat.seatNumber)
+                                Text(seat.seatNumber, fontSize = 12.sp)
                             }
                         }
                     }
@@ -66,7 +131,34 @@ fun SeatLayoutScreen(
 
         Spacer(Modifier.height(16.dp))
         Button(onClick = onConfirm, modifier = Modifier.align(Alignment.End)) {
-            Text("Confirm Layout")
+            Text("Confirm Seats")
         }
     }
+
+    // Dialog for passenger assignment
+    if (selectedSeat != null) {
+        AlertDialog(
+            onDismissRequest = { selectedSeat = null },
+            title = { Text("Assign Passenger") },
+            text = {
+                Column {
+                    passengers.forEach { p ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    passengerViewModel.assignSeat(p.id, selectedSeat!!.seatNumber)
+                                    selectedSeat = null
+                                }
+                                .padding(8.dp)
+                        ) {
+                            Text("${p.name} (${p.age}, ${p.gender})")
+                        }
+                    }
+                }
+            },
+            confirmButton = {}
+        )
+    }
 }
+

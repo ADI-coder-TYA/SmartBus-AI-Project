@@ -19,5 +19,6 @@ enum class SeatType {
 data class VehicleLayout(
     val rows: Int,
     val cols: Int,
-    val seats: List<Seat>
+    val seats: List<Seat>,
+    val vehicleType: String
 )

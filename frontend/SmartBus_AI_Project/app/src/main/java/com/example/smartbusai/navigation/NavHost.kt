@@ -9,6 +9,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.example.smartbusai.constants.Constants
+import com.example.smartbusai.ui.FeedBack.FeedbackScreen
 import com.example.smartbusai.ui.home.HomeScreen
 import com.example.smartbusai.ui.passengers.PassengerSelectionScreen
 import com.example.smartbusai.ui.route.RouteSelectionScreen
@@ -28,6 +29,9 @@ fun AppNavHost(
             startDestination = startDestination,
             route = "main_graph"
         ) {
+            composable("feedback") {
+                FeedbackScreen()
+            }
             composable("home") { backStackEntry ->
                 val parentEntry = remember(backStackEntry) {
                     navController.getBackStackEntry("main_graph")

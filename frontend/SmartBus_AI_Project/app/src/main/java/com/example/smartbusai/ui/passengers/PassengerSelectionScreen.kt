@@ -38,12 +38,15 @@ import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
 import java.io.BufferedReader
 import java.io.InputStreamReader
+import java.util.UUID
 
 data class Passenger(
     var name: String = "",
     var age: String = "",
     var gender: String = "",
-    var disability: String = ""
+    var disability: String = "",
+    val id: String = UUID.randomUUID().toString(),
+    val seatNumber: String? = null
 )
 
 enum class InputMode { NONE, MANUAL, CSV }

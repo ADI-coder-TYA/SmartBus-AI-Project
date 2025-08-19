@@ -74,4 +74,10 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
             }
         }
     }
+
+    fun assignSeat(passengerId: String, seatNumber: String) {
+        _passengers.value = _passengers.value.map {
+            if (it.id == passengerId) it.copy(seatNumber = seatNumber) else it
+        }
+    }
 }
