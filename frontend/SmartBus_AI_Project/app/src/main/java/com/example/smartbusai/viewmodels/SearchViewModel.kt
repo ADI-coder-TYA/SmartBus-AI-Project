@@ -46,8 +46,10 @@ class SearchViewModel @Inject constructor(
     val placeLatLngMap: StateFlow<Map<String, Location>> = _placeLatLngMap
 
     private val intermediateStopIds = mutableListOf<String>()
-    private val departureStopId = mutableStateOf<String?>(null)
-    private val destinationStopId = mutableStateOf<String?>(null)
+    private val _departureStopId = mutableStateOf<String?>(null)
+    val departureStopId: State<String?> = _departureStopId
+    private val _destinationStopId = mutableStateOf<String?>(null)
+    val destinationStopId: State<String?> = _destinationStopId
     val intermediateStops = mutableStateListOf<String>()
 
     fun updateQuery(newQuery: String) {
@@ -56,7 +58,7 @@ class SearchViewModel @Inject constructor(
 
     fun updateDeparture(description: String, placeId: String) {
         selectedDeparture.value = PlaceDetails(description, placeId)
-        departureStopId.value = placeId
+        _departureStopId.value = placeId
     }
 
     fun updateDestination(newDestination: String) {
@@ -64,7 +66,7 @@ class SearchViewModel @Inject constructor(
     }
 
     fun updateDestinationStopId(newId: String) {
-        destinationStopId.value = newId
+        _destinationStopId.value = newId
     }
 
     fun updateIntermediateStop(index: Int, newText: String) {
@@ -125,7 +127,7 @@ class SearchViewModel @Inject constructor(
             try {
                 val deferredResults = mutableListOf<Deferred<Pair<String, Location>>>()
 
-                departureStopId.value?.let { depId ->
+                _departureStopId.value?.let { depId ->
                     deferredResults.add(async { depId to getLatLngFromPlaceId(depId) })
                 }
 
@@ -133,7 +135,7 @@ class SearchViewModel @Inject constructor(
                     deferredResults.add(async { stopId to getLatLngFromPlaceId(stopId) })
                 }
 
-                destinationStopId.value?.let { destId ->
+                _destinationStopId.value?.let { destId ->
                     deferredResults.add(async { destId to getLatLngFromPlaceId(destId) })
                 }
 

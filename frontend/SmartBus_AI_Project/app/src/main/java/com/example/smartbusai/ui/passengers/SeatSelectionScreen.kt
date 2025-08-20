@@ -1,5 +1,7 @@
 package com.example.smartbusai.ui.passengers
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,9 +13,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -28,6 +32,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.example.smartbusai.util.Seat
 import com.example.smartbusai.viewmodels.LayoutViewModel
 import com.example.smartbusai.viewmodels.PassengerViewModel
 
@@ -42,7 +48,10 @@ fun VehicleTypeScreen(
     var cols by remember { mutableStateOf("4") }
 
     Column(
-        Modifier.fillMaxSize().padding(16.dp),
+        Modifier
+            .fillMaxSize()
+            .padding(16.dp)
+            .background(MaterialTheme.colorScheme.background),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         Text("Select Vehicle Type", style = MaterialTheme.typography.headlineSmall)
@@ -52,7 +61,11 @@ fun VehicleTypeScreen(
                 FilterChip(
                     selected = selectedType == type,
                     onClick = { selectedType = type },
-                    label = { Text(type) }
+                    label = { Text(type) },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.secondary,
+                        selectedLabelColor = MaterialTheme.colorScheme.onSecondary
+                    )
                 )
             }
         }
@@ -79,12 +92,14 @@ fun VehicleTypeScreen(
                 layoutViewModel.setLayout(rows.toInt(), cols.toInt(), selectedType)
                 onProceed()
             },
-            modifier = Modifier.align(Alignment.End)
+            modifier = Modifier.align(Alignment.End),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
         ) {
-            Text("Proceed")
+            Text("Proceed", color = MaterialTheme.colorScheme.onSecondary)
         }
     }
 }
+
 
 @Composable
 fun SeatLayoutScreen(
@@ -96,7 +111,7 @@ fun SeatLayoutScreen(
     val passengers by passengerViewModel.passengers.collectAsState()
     var selectedSeat by remember { mutableStateOf<Seat?>(null) }
 
-    Column(Modifier.fillMaxSize().padding(16.dp)) {
+    Column(Modifier.fillMaxSize().padding(16.dp).background(MaterialTheme.colorScheme.background)) {
         Text(
             "Select Seats (${layout?.vehicleType})",
             style = MaterialTheme.typography.headlineSmall
@@ -116,11 +131,11 @@ fun SeatLayoutScreen(
                             Button(
                                 onClick = { selectedSeat = seat },
                                 colors = ButtonDefaults.buttonColors(
-                                    if (seat.isReserved) Color.Gray else Color.Green
+                                    if (seat.isReserved) Color.Gray else MaterialTheme.colorScheme.secondary
                                 ),
                                 modifier = Modifier.size(50.dp)
                             ) {
-                                Text(seat.seatNumber, fontSize = 12.sp)
+                                Text(seat.seatNumber, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSecondary)
                             }
                         }
                     }
@@ -130,8 +145,8 @@ fun SeatLayoutScreen(
         }
 
         Spacer(Modifier.height(16.dp))
-        Button(onClick = onConfirm, modifier = Modifier.align(Alignment.End)) {
-            Text("Confirm Seats")
+        Button(onClick = onConfirm, modifier = Modifier.align(Alignment.End), colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)) {
+            Text("Confirm Seats", color = MaterialTheme.colorScheme.onSecondary)
         }
     }
 
@@ -161,4 +176,3 @@ fun SeatLayoutScreen(
         )
     }
 }
-

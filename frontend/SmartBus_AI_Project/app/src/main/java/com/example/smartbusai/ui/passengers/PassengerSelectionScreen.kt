@@ -3,6 +3,7 @@ package com.example.smartbusai.ui.passengers
 import android.content.Context
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -11,10 +12,17 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -28,26 +36,24 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.navigation.NavController
+import com.example.smartbusai.placesAPI.Location
+import com.example.smartbusai.util.Passenger
 import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
 import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.UUID
-
-data class Passenger(
-    var name: String = "",
-    var age: String = "",
-    var gender: String = "",
-    var disability: String = "",
-    val id: String = UUID.randomUUID().toString(),
-    val seatNumber: String? = null
-)
 
 enum class InputMode { NONE, MANUAL, CSV }
 
@@ -55,13 +61,14 @@ enum class InputMode { NONE, MANUAL, CSV }
 fun PassengerSelectionScreen(
     searchViewModel: SearchViewModel,
     passengerViewModel: PassengerViewModel,
-    onFinished: () -> Unit = {} // navigate to SeatAllotmentScreen
+    onFinished: () -> Unit = {},
+    navController: NavController
 ) {
     val inputMode by passengerViewModel.inputMode.collectAsState()
     val passengers by passengerViewModel.passengers.collectAsState()
     val isFinished by passengerViewModel.isFinished.collectAsState()
+    val stops by searchViewModel.placeLatLngMap.collectAsState()
 
-    // Local UI tracker for which passenger is being edited
     var currentIndex by remember { mutableStateOf(0) }
 
     when (inputMode) {
@@ -78,8 +85,11 @@ fun PassengerSelectionScreen(
                     onConfirm = { count -> passengerViewModel.initPassengers(count) }
                 )
             } else if (isFinished) {
-                SummaryScreen(passengers)
-                // Move forward to ML model
+                SummaryScreen(passengers, onUpdatePassenger = { index, passenger ->
+                    passengerViewModel.updatePassenger(index, passenger)
+                }, onSeatLayoutSelect = {
+                    navController.navigate("layout")
+                })
                 LaunchedEffect(Unit) { onFinished() }
             } else {
                 PassengerForm(
@@ -93,6 +103,7 @@ fun PassengerSelectionScreen(
                             passengerViewModel.markFinished()
                         }
                     },
+                    stops = stops,
                     onBack = {
                         if (currentIndex > 0) currentIndex--
                     },
@@ -108,12 +119,15 @@ fun PassengerSelectionScreen(
                 onParsed = { parsed -> passengerViewModel.setPassengersFromCsv(parsed) }
             )
             if (isFinished) {
-                SummaryScreen(passengers)
+                SummaryScreen(passengers, onUpdatePassenger = { index, passenger ->
+                    passengerViewModel.updatePassenger(index, passenger)
+                }, onSeatLayoutSelect = {navController.navigate("layout")})
                 LaunchedEffect(Unit) { onFinished() }
             }
         }
     }
 }
+
 
 @Composable
 fun ModeSelectionDialog(onManual: () -> Unit, onCsv: () -> Unit) {
@@ -156,6 +170,7 @@ fun PassengerForm(
     passenger: Passenger,
     index: Int,
     total: Int,
+    stops: Map<String, Location>,
     onNext: () -> Unit,
     onBack: () -> Unit,
     onUpdate: (Passenger) -> Unit
@@ -225,7 +240,7 @@ fun PassengerForm(
             }
         }
 
-// Disability dropdown
+    // Disability dropdown
         var expandedDisability by remember { mutableStateOf(false) }
         val disabilities =
             listOf("None", "Wheelchair", "Visual Impairment", "Hearing Impairment", "Other")
@@ -255,6 +270,80 @@ fun PassengerForm(
                             disability = it
                             onUpdate(passenger.copy(disability = it))
                             expandedDisability = false
+                        }
+                    )
+                }
+            }
+        }
+
+        //Pickup and Drop-off Dropdowns
+        var pickupName by remember { mutableStateOf(stops.keys.first()) }
+        var pickupLocation by remember(pickupName) { mutableStateOf(stops[pickupName]!!) }
+
+        var dropName by remember { mutableStateOf(stops.keys.last()) }
+        var dropLocation by remember(dropName) { mutableStateOf(stops[dropName]!!) }
+
+        var expandedPickup by remember { mutableStateOf(false) }
+        var expandedDrop by remember { mutableStateOf(false) }
+
+        ExposedDropdownMenuBox(
+            expanded = expandedPickup,
+            onExpandedChange = { expandedPickup = !expandedPickup },
+        ) {
+            OutlinedTextField(
+                value = pickupName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Pickup") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPickup) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedPickup,
+                onDismissRequest = { expandedPickup = false }
+            ) {
+                stops.keys.forEach {
+                    DropdownMenuItem(
+                        text = { Text(it) },
+                        onClick = {
+                            pickupName = it
+                            pickupLocation = stops[it]!!
+                            onUpdate(passenger.copy(pickupLocation = pickupLocation, pickupStopId = it))
+                            expandedPickup = false
+                        }
+                    )
+                }
+            }
+        }
+
+        ExposedDropdownMenuBox(
+            expanded = expandedDrop,
+            onExpandedChange = { expandedDrop = !expandedDrop },
+        ) {
+            OutlinedTextField(
+                value = dropName,
+                onValueChange = {},
+                readOnly = true,
+                label = { Text("Drop-off") },
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDrop) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = expandedDrop,
+                onDismissRequest = { expandedDrop = false }
+            ) {
+                stops.keys.forEach {
+                    DropdownMenuItem(
+                        text = { Text(it) },
+                        onClick = {
+                            dropName = it
+                            dropLocation = stops[it]!!
+                            onUpdate(passenger.copy(dropLocation = dropLocation, dropStopId = it))
+                            expandedDrop = false
                         }
                     )
                 }
@@ -339,16 +428,121 @@ fun readCsvFromUri(context: Context, uri: android.net.Uri): List<Passenger> {
 }
 
 @Composable
-fun SummaryScreen(passengers: List<Passenger>) {
+fun SummaryScreen(
+    passengers: List<Passenger>,
+    onUpdatePassenger: (Int, Passenger) -> Unit,
+    onSeatLayoutSelect: () -> Unit
+) {
+    val selected = remember { mutableStateListOf<Int>() }
+
     Column(
         modifier = Modifier
-            .padding(16.dp)
-            .verticalScroll(rememberScrollState())
+            .fillMaxSize()
+            .padding(20.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Text("Passenger Summary", style = MaterialTheme.typography.headlineMedium)
+        // Header
+        Text(
+            "Passenger Summary",
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold
+        )
+
+        Spacer(Modifier.height(16.dp))
+
+        // Passenger list
+        LazyColumn(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            itemsIndexed(passengers) { index, p ->
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (selected.contains(index))
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.surface
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable {
+                            if (selected.contains(index)) selected.remove(index)
+                            else selected.add(index)
+                        }
+                        .shadow(4.dp, RoundedCornerShape(16.dp))
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                "${p.name}, Age ${p.age}",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                            Text("Gender: ${p.gender}", style = MaterialTheme.typography.bodyMedium)
+                            Text("Disability: ${p.disability}", style = MaterialTheme.typography.bodyMedium)
+                            Text("Pickup: ${p.pickupLocation}", style = MaterialTheme.typography.bodySmall)
+                            Text("Drop-off: ${p.dropLocation}", style = MaterialTheme.typography.bodySmall)
+
+                            if (p.groupId.isNotEmpty()) {
+                                Text(
+                                    "Group: ${p.groupId.take(6)}…",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                            }
+                        }
+
+                        Checkbox(
+                            checked = selected.contains(index),
+                            onCheckedChange = {
+                                if (it) selected.add(index) else selected.remove(index)
+                            }
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(20.dp))
+
+        // Group creation button
+        Button(
+            onClick = {
+                if (selected.isNotEmpty()) {
+                    val groupId = UUID.randomUUID().toString()
+                    selected.forEach { idx ->
+                        val p = passengers[idx]
+                        onUpdatePassenger(idx, p.copy(groupId = groupId))
+                    }
+                    selected.clear()
+                }
+            },
+            enabled = selected.size >= 2,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp)
+        ) {
+            Text("Create Group")
+        }
+
         Spacer(Modifier.height(12.dp))
-        passengers.forEachIndexed { i, p ->
-            Text("Passenger ${i + 1}: ${p.name}, Age ${p.age}, ${p.gender}, Disability: ${p.disability}")
+
+        // Proceed button
+        Button(
+            onClick = onSeatLayoutSelect,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(12.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
+            Text("Proceed to Seat Layout Selection")
         }
     }
 }

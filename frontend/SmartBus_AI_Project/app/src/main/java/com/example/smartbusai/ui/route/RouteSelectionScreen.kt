@@ -3,7 +3,17 @@ package com.example.smartbusai.ui.route
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -12,8 +22,27 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.AddCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.LocationOn
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SearchBar
+import androidx.compose.material3.SearchBarDefaults
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,7 +54,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
-import androidx.navigation.compose.rememberNavController
 import com.example.smartbusai.R
 import com.example.smartbusai.constants.Constants
 import com.example.smartbusai.placesAPI.Prediction
@@ -187,7 +215,10 @@ fun RouteBox(
                         items(predictions.size) { index ->
                             val prediction = predictions[index]
                             SearchItem(prediction.description) {
-                                viewModel.updateDeparture(prediction.description, prediction.place_id)
+                                viewModel.updateDeparture(
+                                    prediction.description,
+                                    prediction.place_id
+                                )
                                 viewModel.updateQuery(prediction.description)
                                 expandedDeparture = false
                             }
@@ -196,11 +227,18 @@ fun RouteBox(
                 }
 
                 // Add Stop Button
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
                     IconButton(onClick = { viewModel.addIntermediateStop() }) {
                         Icon(Icons.Filled.AddCircle, contentDescription = null)
                     }
-                    Text("Add another stop...", fontStyle = FontStyle.Italic, color = Color(0xFF888888))
+                    Text(
+                        "Add another stop...",
+                        fontStyle = FontStyle.Italic,
+                        color = Color(0xFF888888)
+                    )
                 }
 
                 // Intermediate Stops
@@ -217,13 +255,22 @@ fun RouteBox(
                                     SearchBarDefaults.InputField(
                                         modifier = Modifier
                                             .clip(RoundedCornerShape(24.dp))
-                                            .border(2.dp, Color(0xFF888888), RoundedCornerShape(24.dp)),
+                                            .border(
+                                                2.dp,
+                                                Color(0xFF888888),
+                                                RoundedCornerShape(24.dp)
+                                            ),
                                         query = stopText,
                                         onQueryChange = {
                                             viewModel.updateIntermediateStop(index, it)
                                             viewModel.searchPlaces(it, Constants.PLACES_API_KEY)
                                         },
-                                        placeholder = { Text("Stop ${index + 1}", color = Color(0xFF888888)) },
+                                        placeholder = {
+                                            Text(
+                                                "Stop ${index + 1}",
+                                                color = Color(0xFF888888)
+                                            )
+                                        },
                                         expanded = isExpanded,
                                         onExpandedChange = { expansionStates[index] = it },
                                         onSearch = {},
@@ -238,8 +285,14 @@ fun RouteBox(
                                     items(predictions.size) { predIndex ->
                                         val prediction = predictions[predIndex]
                                         SearchItem(prediction.description) {
-                                            viewModel.updateIntermediateStop(index, prediction.description)
-                                            viewModel.updateIntermediateStopPlaceId(index, prediction.place_id)
+                                            viewModel.updateIntermediateStop(
+                                                index,
+                                                prediction.description
+                                            )
+                                            viewModel.updateIntermediateStopPlaceId(
+                                                index,
+                                                prediction.place_id
+                                            )
                                             expansionStates[index] = false
                                         }
                                     }
@@ -253,7 +306,11 @@ fun RouteBox(
                                 expansionStates.remove(index)
                             }
                         ) {
-                            Icon(Icons.Filled.Delete, contentDescription = "Remove stop", tint = Color.Red)
+                            Icon(
+                                Icons.Filled.Delete,
+                                contentDescription = "Remove stop",
+                                tint = Color.Red
+                            )
                         }
                     }
                 }
