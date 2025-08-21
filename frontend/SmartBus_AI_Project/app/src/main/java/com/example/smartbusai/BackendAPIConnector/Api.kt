@@ -10,6 +10,4 @@ import retrofit2.http.POST
 interface Api  {
     @POST("Seats")
     fun getSeats(@Body request: SeatRequest): Call<SeatResponse>
-
-
 }

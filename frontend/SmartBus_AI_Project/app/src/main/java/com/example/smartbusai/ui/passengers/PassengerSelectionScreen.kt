@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -121,7 +119,7 @@ fun PassengerSelectionScreen(
             if (isFinished) {
                 SummaryScreen(passengers, onUpdatePassenger = { index, passenger ->
                     passengerViewModel.updatePassenger(index, passenger)
-                }, onSeatLayoutSelect = {navController.navigate("layout")})
+                }, onSeatLayoutSelect = { navController.navigate("layout") })
                 LaunchedEffect(Unit) { onFinished() }
             }
         }
@@ -240,7 +238,7 @@ fun PassengerForm(
             }
         }
 
-    // Disability dropdown
+        // Disability dropdown
         var expandedDisability by remember { mutableStateOf(false) }
         val disabilities =
             listOf("None", "Wheelchair", "Visual Impairment", "Hearing Impairment", "Other")
@@ -310,7 +308,12 @@ fun PassengerForm(
                         onClick = {
                             pickupName = it
                             pickupLocation = stops[it]!!
-                            onUpdate(passenger.copy(pickupLocation = pickupLocation, pickupStopId = it))
+                            onUpdate(
+                                passenger.copy(
+                                    pickupLocation = pickupLocation,
+                                    pickupStopId = it
+                                )
+                            )
                             expandedPickup = false
                         }
                     )
@@ -488,13 +491,22 @@ fun SummaryScreen(
                                 fontWeight = FontWeight.SemiBold
                             )
                             Text("Gender: ${p.gender}", style = MaterialTheme.typography.bodyMedium)
-                            Text("Disability: ${p.disability}", style = MaterialTheme.typography.bodyMedium)
-                            Text("Pickup: ${p.pickupLocation}", style = MaterialTheme.typography.bodySmall)
-                            Text("Drop-off: ${p.dropLocation}", style = MaterialTheme.typography.bodySmall)
+                            Text(
+                                "Disability: ${p.disability}",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                            Text(
+                                "Pickup: ${p.pickupLocation}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "Drop-off: ${p.dropLocation}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
 
-                            if (p.groupId.isNotEmpty()) {
+                            if (p.groupId?.isNotEmpty() ?: false) {
                                 Text(
-                                    "Group: ${p.groupId.take(6)}…",
+                                    "Group: ${((p.groupId?.take(6)) ?: "")}…",
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.secondary
                                 )

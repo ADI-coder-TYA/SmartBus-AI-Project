@@ -30,12 +30,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.navigation.NavController
+import com.example.smartbusai.BackendAPIConnector.onProceedButtonPressed
 import com.example.smartbusai.util.Seat
 import com.example.smartbusai.viewmodels.LayoutViewModel
 import com.example.smartbusai.viewmodels.PassengerViewModel
+import com.example.smartbusai.viewmodels.SearchViewModel
 
 
 @Composable
@@ -103,13 +107,24 @@ fun VehicleTypeScreen(
 
 @Composable
 fun SeatLayoutScreen(
+    navController: NavController,
     layoutViewModel: LayoutViewModel,
     passengerViewModel: PassengerViewModel,
+    searchViewModel: SearchViewModel,
     onConfirm: () -> Unit
 ) {
     val layout by layoutViewModel.layout.collectAsState()
+    val context = LocalContext.current
     val passengers by passengerViewModel.passengers.collectAsState()
     var selectedSeat by remember { mutableStateOf<Seat?>(null) }
+
+    onProceedButtonPressed(
+        context = context,
+        passengerViewModel = passengerViewModel,
+        layoutViewModel = layoutViewModel,
+        searchViewModel = searchViewModel,
+        navController = navController
+    )
 
     Column(Modifier.fillMaxSize().padding(16.dp).background(MaterialTheme.colorScheme.background)) {
         Text(

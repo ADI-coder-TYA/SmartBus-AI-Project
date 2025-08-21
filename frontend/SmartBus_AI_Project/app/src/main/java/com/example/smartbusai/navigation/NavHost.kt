@@ -46,10 +46,11 @@ fun AppNavHost(
                 }
                 val layoutViewModel = hiltViewModel<LayoutViewModel>(parentEntry)
                 val passengerViewModel = hiltViewModel<PassengerViewModel>(parentEntry)
+                val searchViewModel = hiltViewModel<SearchViewModel>(parentEntry)
 
-                SeatLayoutScreen(layoutViewModel, passengerViewModel, {
+                SeatLayoutScreen(layoutViewModel = layoutViewModel, passengerViewModel = passengerViewModel, onConfirm = {
                     //navController.navigate("feedback")
-                })
+                }, searchViewModel = searchViewModel, navController = navController)
             }
             composable("feedback") {
                 FeedbackScreen()

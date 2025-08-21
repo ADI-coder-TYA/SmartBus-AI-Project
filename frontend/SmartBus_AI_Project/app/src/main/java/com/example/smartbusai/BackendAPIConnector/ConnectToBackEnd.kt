@@ -12,7 +12,7 @@ import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
 import com.example.streamease.helper.RetrofitClient
 
-fun OnProceedButtonPressed(
+fun onProceedButtonPressed(
     context: Context,
     navController: NavController,
     searchViewModel: SearchViewModel,
@@ -24,7 +24,7 @@ fun OnProceedButtonPressed(
     val selectedDep = searchViewModel.selectedDeparture.value     // PlaceDetails? (expect placeId inside)
     val selectedDest = searchViewModel.selectedDestination.value  // String
 
-    if (selectedDep == null || selectedDest == null) {
+    if (selectedDep == null || selectedDest.isEmpty()) {
         Toast.makeText(context, "Please select departure and destination", Toast.LENGTH_LONG).show()
         return
     }
@@ -109,4 +109,3 @@ fun OnProceedButtonPressed(
         }
     })
 }
-
