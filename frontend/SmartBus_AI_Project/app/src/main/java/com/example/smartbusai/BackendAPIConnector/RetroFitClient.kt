@@ -29,7 +29,7 @@ class RetrofitClient {
         get() = retrofit.create(Api::class.java)
 
     companion object {
-        private const val BASE_URL = "http://10.0.2.2:8000/"  //for virtual android devices replace everything before:8000 to PC ip adress for real phones and connect the phone to same wifi and also change xml network security config file
+        private const val BASE_URL = "http://10.252.92.30:8000/"  //for virtual android devices replace everything before:8000 to PC ip adress for real phones and connect the phone to same wifi and also change xml network security config file
 
         private var retrofitClient: RetrofitClient? = null
         private lateinit var retrofit: Retrofit

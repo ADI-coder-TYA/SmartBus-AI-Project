@@ -7,6 +7,7 @@ import androidx.navigation.NavController
 import com.example.smartbusai.util.Route
 import com.example.smartbusai.util.SeatRequest
 import com.example.smartbusai.util.SeatResponse
+import com.example.smartbusai.util.VehicleReq
 import com.example.smartbusai.viewmodels.LayoutViewModel
 import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
@@ -53,16 +54,14 @@ fun onProceedButtonPressed(
         Toast.makeText(context, "Please add passengers first", Toast.LENGTH_LONG).show()
         return
     }
-
+    val vehicleRq= VehicleReq(layout.rows,layout.cols,layout.vehicleType)
     val seatRequest = SeatRequest(
         route = Route(departure = depLoc, destination = destLoc),
         passengers = uiPassengers,
-        vehicleType = layout.vehicleType,
-        rows = layout.rows,
-        columns = layout.cols
+        vehicle = vehicleRq
     )
 
-    val call = RetrofitClient.instance?.api?.getSeats(seatRequest)
+    val call = RetrofitClient.instance?.api?.allocateSeats(seatRequest)
     if (call == null) {
         Toast.makeText(context, "Network client not initialized", Toast.LENGTH_LONG).show()
         return
@@ -86,7 +85,7 @@ fun onProceedButtonPressed(
 
                 // Apply seat assignments to passengerViewModel
                 assignments.forEach { (passengerId, seatAssignment) ->
-                    val seatId = seatAssignment.seat_id
+                    val seatId = seatAssignment.seatId
                     // Update passenger in viewmodel (we assume assignSeat exists)
                     passengerViewModel.assignSeat(passengerId, seatId)
                 }
