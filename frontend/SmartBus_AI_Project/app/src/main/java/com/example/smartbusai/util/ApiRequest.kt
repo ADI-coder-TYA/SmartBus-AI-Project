@@ -40,3 +40,11 @@ data class SeatAssignment(
     val row: Int,
     val col: Int
 )
+
+data class FeedbackRequest(
+    val passengerId: String,
+    val rating: Int,
+    @SerializedName("seatLabel") val seatLabel: String,
+    val totalRows: Int,
+    val totalCols: Int
+)

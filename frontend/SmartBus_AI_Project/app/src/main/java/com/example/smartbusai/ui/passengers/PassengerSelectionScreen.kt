@@ -1,6 +1,7 @@
 package com.example.smartbusai.ui.passengers
 
 import android.content.Context
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -23,11 +24,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.AccountBox
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.DateRange
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.List
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,6 +39,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Divider
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExposedDropdownMenuBox
@@ -56,14 +60,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -78,6 +81,7 @@ import java.io.BufferedReader
 import java.io.InputStreamReader
 import java.util.UUID
 
+// Define Enum (Required for ViewModel)
 enum class InputMode { NONE, MANUAL, CSV }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -85,32 +89,44 @@ enum class InputMode { NONE, MANUAL, CSV }
 fun PassengerSelectionScreen(
     searchViewModel: SearchViewModel,
     passengerViewModel: PassengerViewModel,
-    navController: NavController,
-    onFinished: () -> Unit = {}
+    navController: NavController
 ) {
-    // Theme palette (consistent)
+    // --- Rich Theme Palette ---
     val navyBlue = Color(0xFF0B1D39)
     val goldenYellow = Color(0xFFFFC107)
     val deepGreen = Color(0xFF008800)
-    val surface = Color.White
-    val muted = Color(0xFF6E6E6E)
+    val surfaceColor = Color.White
+    val bgColor = Color(0xFFF6F8FA)
+    val mutedText = Color(0xFF6E6E6E)
 
-    // ViewModel state
+    // --- State ---
     val inputMode by passengerViewModel.inputMode.collectAsState()
     val passengers by passengerViewModel.passengers.collectAsState()
     val isFinished by passengerViewModel.isFinished.collectAsState()
-    val stops by searchViewModel.placeLatLngMap.collectAsState() // Map<String, Location>
+    val stops by searchViewModel.placeLatLngMap.collectAsState()
 
-    // local UI state
-    var currentIndex by remember { mutableStateOf(0) }
+    // API Status monitoring
+    val apiStatus by passengerViewModel.allocationStatus.collectAsState()
+    val navigateNext by passengerViewModel.navigateToNext.collectAsState()
+
+    // --- Navigation Side-Effect ---
+    LaunchedEffect(navigateNext) {
+        if (navigateNext) {
+            passengerViewModel.onNavigationHandled()
+            // Make sure this route matches your NavHost configuration
+            navController.navigate("seat_selection_screen")
+        }
+    }
+
+    // Local State
+    var currentIndex by remember { mutableIntStateOf(0) }
     var showHelp by remember { mutableStateOf(false) }
 
-    // derived
-    val total = passengers.size.takeIf { it > 0 } ?: 0
+    val total = passengers.size
     val currentPassenger = passengers.getOrNull(currentIndex)
 
     Scaffold(
-        containerColor = Color(0xFFF6F8FA),
+        containerColor = bgColor,
         topBar = {
             TopAppBar(
                 title = {
@@ -122,133 +138,98 @@ fun PassengerSelectionScreen(
                         )
                         Text(
                             text = when {
-                                inputMode == InputMode.NONE -> "Choose input method"
-                                inputMode == InputMode.MANUAL && total > 0 -> "Passenger ${currentIndex + 1} of $total"
-                                inputMode == InputMode.MANUAL -> "Manual entry"
-                                inputMode == InputMode.CSV -> "Import from CSV"
-                                else -> ""
+                                inputMode == InputMode.NONE -> "Select Input Method"
+                                inputMode == InputMode.MANUAL && !isFinished -> "Passenger ${currentIndex + 1} of $total"
+                                isFinished -> "Review & Group"
+                                else -> "Import Data"
                             },
                             style = MaterialTheme.typography.bodySmall,
-                            color = muted
+                            color = mutedText
                         )
                     }
                 },
                 navigationIcon = {
                     IconButton(onClick = { navController.navigateUp() }) {
-                        Icon(
-                            Icons.AutoMirrored.Default.ArrowBack,
-                            contentDescription = "Back",
-                            tint = navyBlue
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = navyBlue)
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = surface)
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = surfaceColor)
             )
         },
         bottomBar = {
-            Surface(shadowElevation = 6.dp, color = surface) {
-                Column {
-                    // Helpful small status / progress row
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        if (stops.isEmpty()) {
-                            // show spinner if stops haven't been fetched yet
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(18.dp),
-                                    strokeWidth = 2.dp,
-                                    color = deepGreen
-                                )
-                                Spacer(Modifier.width(8.dp))
-                                Text(
-                                    "Fetching route coordinates...",
-                                    color = muted,
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        } else {
-                            Text(
-                                "Stops available: ${stops.size}",
-                                color = muted,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
-                        // small help / summary toggle
-                        TextButton(onClick = { showHelp = !showHelp }) {
-                            Icon(Icons.Default.Info, contentDescription = "Help", tint = navyBlue)
-                            Spacer(Modifier.width(6.dp))
-                            Text(if (showHelp) "Hide tips" else "Tips", color = navyBlue)
-                        }
-                    }
-
-                    // Action buttons row
-                    Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .padding(12.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        OutlinedButton(
-                            onClick = {
-                                // save current edits (if any) and go back
-                                currentPassenger?.let {
-                                    passengerViewModel.updatePassenger(
-                                        currentIndex,
-                                        it
+            // Only show bottom bar actions if we are NOT in the initial selection mode
+            if (inputMode != InputMode.NONE) {
+                Surface(shadowElevation = 12.dp, color = surfaceColor) {
+                    Column(Modifier.padding(16.dp)) {
+                        // Helpful Tip Row
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            if (stops.isEmpty()) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(14.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text(
+                                        "Loading route info...",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = mutedText
                                     )
                                 }
-                                navController.navigateUp()
-                            },
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("Cancel", color = navyBlue)
-                        }
-
-                        Row {
-                            TextButton(
-                                onClick = {
-                                    // quick jump to summary if some passengers exist
-                                    if (passengers.isNotEmpty()) passengerViewModel.markFinished()
-                                },
-                                enabled = passengers.isNotEmpty(),
-                                modifier = Modifier.align(Alignment.CenterVertically)
-                            ) {
-                                Text("View summary", color = navyBlue)
+                            } else {
+                                Text(
+                                    "${stops.size} stops available",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = deepGreen
+                                )
                             }
 
-                            Spacer(Modifier.width(8.dp))
-
-                            Button(
-                                onClick = {
-                                    // If finished, go to layout; otherwise go next passenger
-                                    if (currentIndex < passengers.size - 1) {
-                                        // ensure current is saved
-                                        currentPassenger?.let {
-                                            passengerViewModel.updatePassenger(
-                                                currentIndex,
-                                                it
-                                            )
-                                        }
-                                        currentIndex++
-                                    } else {
-                                        // last passenger: mark finished -> shows summary
-                                        passengerViewModel.markFinished()
-                                        // navigate to layout will be handled from SummaryScreen button
-                                    }
-                                },
-                                shape = RoundedCornerShape(12.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = deepGreen)
-                            ) {
+                            TextButton(onClick = { showHelp = !showHelp }) {
+                                Icon(Icons.Default.Info, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
                                 Text(
-                                    if (currentIndex < passengers.size - 1) "Next" else "Finish",
-                                    color = Color.White
+                                    if (showHelp) "Hide Tips" else "Show Tips",
+                                    style = MaterialTheme.typography.labelSmall
                                 )
+                            }
+                        }
+
+                        Spacer(Modifier.height(8.dp))
+
+                        // Action Buttons Row
+                        Row(
+                            Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    passengerViewModel.reset()
+                                    currentIndex = 0 // Reset local index too
+                                },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text("Reset / Cancel", color = navyBlue)
+                            }
+
+                            // Navigation Logic for Manual Mode
+                            if (inputMode == InputMode.MANUAL && !isFinished && total > 0) {
+                                Button(
+                                    onClick = {
+                                        if (currentIndex < total - 1) {
+                                            currentIndex++
+                                        } else {
+                                            passengerViewModel.markFinished()
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = ButtonDefaults.buttonColors(containerColor = navyBlue)
+                                ) {
+                                    Text(if (currentIndex < total - 1) "Next Passenger" else "Review Summary")
+                                }
                             }
                         }
                     }
@@ -256,163 +237,144 @@ fun PassengerSelectionScreen(
             }
         }
     ) { innerPadding ->
-        Column(
+        Box(
             modifier = Modifier
                 .padding(innerPadding)
                 .fillMaxSize()
-                .padding(16.dp)
         ) {
-            // --- Help / tips area (collapsible) ---
-            if (showHelp) {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0))
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            "Tips for passenger entry",
-                            fontWeight = FontWeight.SemiBold,
-                            color = navyBlue
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // Help Card
+                if (showHelp) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFFBF0)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(Modifier.padding(16.dp)) {
+                            Text("💡 Quick Tips", fontWeight = FontWeight.Bold, color = navyBlue)
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                "• Select pickup/drop stops from the dropdowns.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "• Use CSV import for large groups (Format: Name, Age, Gender, Disability).",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                            Text(
+                                "• You can group passengers in the Summary screen to ensure they sit together.",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+                }
+
+                // Main Content Switching
+                when {
+                    // 1. Initial Selection Screen
+                    inputMode == InputMode.NONE -> {
+                        Spacer(Modifier.height(32.dp))
+                        SelectionCard(
+                            title = "Manual Entry",
+                            desc = "Add passengers one by one. Good for small families.",
+                            icon = Icons.Default.Edit,
+                            onClick = { passengerViewModel.setInputMode(InputMode.MANUAL) }
                         )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            "- Select the pickup and drop stops for each passenger from the route stops.",
-                            color = muted
+                        SelectionCard(
+                            title = "Import CSV",
+                            desc = "Upload a list from a file. Best for large groups.",
+                            icon = Icons.Default.List,
+                            onClick = { passengerViewModel.setInputMode(InputMode.CSV) }
                         )
-                        Text("- You can import from CSV for many passengers faster.", color = muted)
-                        Text(
-                            "- Group related passengers on the summary screen for group cohesion.",
-                            color = muted
+                    }
+
+                    // 2. CSV Import Mode
+                    inputMode == InputMode.CSV && !isFinished -> {
+                        CSVFilePickerScreen(onParsed = { list ->
+                            passengerViewModel.setPassengersFromCsv(
+                                list
+                            )
+                        }, onCancel = { passengerViewModel.reset() })
+                    }
+
+                    // 3. Manual Entry Form
+                    inputMode == InputMode.MANUAL && !isFinished -> {
+                        if (passengers.isEmpty()) {
+                            // First time asking for count
+                            NumberDialog(onConfirm = { count ->
+                                passengerViewModel.initPassengers(
+                                    count
+                                )
+                            }, onCancel = { passengerViewModel.reset() })
+                        } else {
+                            // The actual form
+                            currentPassenger?.let { p ->
+                                PassengerForm(
+                                    passenger = p,
+                                    index = currentIndex,
+                                    total = total,
+                                    stops = stops,
+                                    onUpdate = { updated ->
+                                        passengerViewModel.updatePassenger(
+                                            currentIndex,
+                                            updated
+                                        )
+                                    },
+                                    onNext = {
+                                        if (currentIndex < total - 1) {
+                                            currentIndex++
+                                        } else {
+                                            passengerViewModel.markFinished()
+                                        }
+                                    },
+                                    onBack = {
+                                        if (currentIndex > 0) currentIndex-- else passengerViewModel.reset()
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // 4. Summary & Grouping
+                    isFinished -> {
+                        SummaryScreen(
+                            passengers = passengers,
+                            onUpdatePassenger = { i, p ->
+                                passengerViewModel.updatePassenger(
+                                    i,
+                                    p
+                                )
+                            },
+                            onSeatLayoutSelect = {
+                                // Navigate to layout selection logic
+                                navController.navigate("layout_selection_screen")
+                            }
                         )
                     }
                 }
-                Spacer(Modifier.height(12.dp))
             }
 
-            // --- Mode handling ---
-            when (inputMode) {
-                InputMode.NONE -> {
-                    // show attractive prompt card instead of a blocking dialog
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = RoundedCornerShape(12.dp),
-                        elevation = CardDefaults.cardElevation(6.dp),
-                        colors = CardDefaults.cardColors(containerColor = surface)
-                    ) {
+            // Loading Overlay for API calls
+            if (apiStatus == "Allocating...") {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.5f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Card {
                         Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                            Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
                         ) {
-                            Text(
-                                "Add passengers",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = navyBlue
-                            )
-                            Text(
-                                "You can add passengers manually or import a CSV file (Name,Age,Gender,Disability,Pickup,Drop).",
-                                color = muted
-                            )
-                            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                Button(
-                                    onClick = { passengerViewModel.setInputMode(InputMode.MANUAL) },
-                                    colors = ButtonDefaults.buttonColors(containerColor = deepGreen),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Edit,
-                                        contentDescription = null,
-                                        tint = Color.White
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("Manual", color = Color.White)
-                                }
-                                OutlinedButton(
-                                    onClick = { passengerViewModel.setInputMode(InputMode.CSV) },
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Default.Add,
-                                        contentDescription = null,
-                                        tint = navyBlue
-                                    )
-                                    Spacer(Modifier.width(8.dp))
-                                    Text("CSV", color = navyBlue)
-                                }
-                            }
+                            CircularProgressIndicator()
+                            Spacer(Modifier.height(16.dp))
+                            Text("AI is optimizing seats...")
                         }
-                    }
-                }
-
-                InputMode.MANUAL -> {
-                    if (passengers.isEmpty() && !isFinished) {
-                        NumberDialog(onConfirm = { count -> passengerViewModel.initPassengers(count) })
-                    } else if (isFinished) {
-                        // show polished summary when finished
-                        SummaryScreen(
-                            passengers = passengers,
-                            onSeatLayoutSelect = {
-                                navController.navigate("layout")
-                            },
-                            onUpdatePassenger = { idx, p ->
-                                passengerViewModel.updatePassenger(
-                                    idx,
-                                    p
-                                )
-                            }
-                        )
-                    } else {
-                        // Show the form for current passenger
-                        currentPassenger?.let { p ->
-                            Card(
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(12.dp),
-                                elevation = CardDefaults.cardElevation(6.dp)
-                            ) {
-                                Column(modifier = Modifier.padding(16.dp)) {
-                                    PassengerForm(
-                                        passenger = p,
-                                        index = currentIndex,
-                                        total = total,
-                                        stops = stops,
-                                        onNext = {
-                                            // Save current and go next or finish
-                                            passengerViewModel.updatePassenger(currentIndex, p)
-                                            if (currentIndex < total - 1) currentIndex++ else passengerViewModel.markFinished()
-                                        },
-                                        onBack = {
-                                            passengerViewModel.updatePassenger(currentIndex, p)
-                                            if (currentIndex > 0) currentIndex-- else navController.navigateUp()
-                                        },
-                                        onUpdate = { updated ->
-                                            passengerViewModel.updatePassenger(
-                                                currentIndex,
-                                                updated
-                                            )
-                                        }
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                InputMode.CSV -> {
-                    // CSV import UI
-                    CSVFilePickerScreen(onParsed = { parsed ->
-                        passengerViewModel.setPassengersFromCsv(parsed)
-                    })
-
-                    if (isFinished) {
-                        SummaryScreen(
-                            passengers = passengers,
-                            onSeatLayoutSelect = { navController.navigate("layout") },
-                            onUpdatePassenger = { idx, p ->
-                                passengerViewModel.updatePassenger(
-                                    idx,
-                                    p
-                                )
-                            }
-                        )
                     }
                 }
             }
@@ -420,193 +382,76 @@ fun PassengerSelectionScreen(
     }
 }
 
-@Composable
-fun ModeSelectionDialog(onManual: () -> Unit, onCsv: () -> Unit) {
-    // Brand colors (same palette we've been using)
-    val navyBlue = Color(0xFF0B1D39)
-    val goldenYellow = Color(0xFFFFC107)
-    val deepGreen = Color(0xFF008800)
-    val surface = Color.White
+// --- Components ---
 
-    AlertDialog(
-        onDismissRequest = { /* intentionally no-op to force a choice */ },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                // small decorative icon matching theme
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(goldenYellow, shape = CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.AccountBox,
-                        contentDescription = "Mode",
-                        tint = navyBlue,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Column {
-                    Text(
-                        text = "Passenger Input",
-                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                        color = navyBlue
-                    )
-                    Text(
-                        text = "Choose how you'll provide passenger data",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.DarkGray
-                    )
-                }
+@Composable
+fun SelectionCard(
+    title: String,
+    desc: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        elevation = CardDefaults.cardElevation(4.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Row(
+            modifier = Modifier.padding(20.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(50.dp)
+                    .background(Color(0xFFE3F2FD), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = Color(0xFF0B1D39))
             }
-        },
-        text = {
+            Spacer(Modifier.width(16.dp))
             Column {
                 Text(
-                    "Enter passengers manually (one-by-one) or import a CSV file with columns: Name,Age,Gender,Disability,Pickup,Drop.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color.DarkGray
+                    title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold
                 )
+                Text(desc, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = onManual,
-                colors = ButtonDefaults.buttonColors(containerColor = deepGreen),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.padding(end = 8.dp)
-            ) {
-                Icon(
-                    Icons.Default.Edit,
-                    contentDescription = "Manual",
-                    tint = Color.White,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Manual Entry", color = Color.White)
-            }
-        },
-        dismissButton = {
-            OutlinedButton(
-                onClick = onCsv,
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = navyBlue),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    Icons.Default.Notifications,
-                    contentDescription = "CSV",
-                    tint = navyBlue,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(Modifier.width(8.dp))
-                Text("Import CSV")
-            }
-        },
-        shape = RoundedCornerShape(16.dp),
-        containerColor = surface,
-        tonalElevation = 6.dp
-    )
+        }
+    }
 }
 
 @Composable
-fun NumberDialog(onConfirm: (Int) -> Unit) {
-    val navyBlue = Color(0xFF0B1D39)
-    val goldenYellow = Color(0xFFFFC107)
-    val surface = Color.White
-
-    var input by remember { mutableStateOf("") }
-    var showError by remember { mutableStateOf(false) }
+fun NumberDialog(onConfirm: (Int) -> Unit, onCancel: () -> Unit) {
+    var text by remember { mutableStateOf("") }
 
     AlertDialog(
-        onDismissRequest = { /* keep it modal until explicit action */ },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .background(goldenYellow, shape = CircleShape),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
-                        contentDescription = "Number",
-                        tint = navyBlue,
-                        modifier = Modifier.size(18.dp)
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(
-                    "Number of Passengers",
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
-                    color = navyBlue
-                )
-            }
-        },
+        onDismissRequest = {},
+        icon = { Icon(Icons.Default.Person, null) },
+        title = { Text("How many passengers?") },
         text = {
-            Column {
-                OutlinedTextField(
-                    value = input,
-                    onValueChange = {
-                        // keep only digits
-                        if (it.all { ch -> ch.isDigit() } && it.length <= 3) {
-                            input = it
-                            showError = false
-                        }
-                    },
-                    label = { Text("Enter count", color = Color.DarkGray) },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (showError) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Please enter a number greater than 0.",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    "Tip: For CSV import, the first row may be a header. Fields expected: Name,Age,Gender,Disability,Pickup,Drop",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.Gray
-                )
-            }
+            OutlinedTextField(
+                value = text,
+                onValueChange = { if (it.all { c -> c.isDigit() }) text = it },
+                label = { Text("Count") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
         },
         confirmButton = {
             Button(
-                onClick = {
-                    val count = input.toIntOrNull() ?: 0
-                    if (count > 0) {
-                        onConfirm(count)
-                    } else {
-                        showError = true
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = navyBlue),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("OK", color = Color.White)
-            }
+                onClick = { onConfirm(text.toIntOrNull() ?: 1) },
+                enabled = text.isNotEmpty() && (text.toIntOrNull() ?: 0) > 0,
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B1D39))
+            ) { Text("Start Entry") }
         },
         dismissButton = {
-            TextButton(
-                onClick = {
-                    // clear and close: since original had no dismiss param, we just clear
-                    input = ""
-                    showError = false
-                }
-            ) {
-                Text("Cancel", color = navyBlue)
-            }
+            TextButton(onClick = onCancel) { Text("Cancel") }
         },
-        shape = RoundedCornerShape(16.dp),
-        containerColor = surface,
-        tonalElevation = 6.dp
+        containerColor = Color.White
     )
 }
 
@@ -616,408 +461,325 @@ fun PassengerForm(
     passenger: Passenger,
     index: Int,
     total: Int,
-    stops: Map<String, Location>, // map: stopName -> Location
+    stops: Map<String, Location>,
+    onUpdate: (Passenger) -> Unit,
     onNext: () -> Unit,
-    onBack: () -> Unit,
-    onUpdate: (Passenger) -> Unit
+    onBack: () -> Unit
 ) {
-    // Theme colors (same palette)
-    val navyBlue = Color(0xFF0B1D39)
-    val goldenYellow = Color(0xFFFFC107)
-    val deepGreen = Color(0xFF008800)
-    val grayText = Color(0xFF777777)
+    // Form State (Sync with prop)
+    var name by remember(passenger) { mutableStateOf(passenger.name) }
+    var age by remember(passenger) { mutableStateOf(passenger.age.toString()) }
+    var gender by remember(passenger) { mutableStateOf(passenger.gender) }
+    var disability by remember(passenger) { mutableStateOf(passenger.disability) }
 
-    // Keep local UI state and sync when `passenger` changes
-    var name by remember { mutableStateOf(passenger.name) }
-    var age by remember { mutableStateOf(passenger.age) }
-    var gender by remember { mutableStateOf(passenger.gender) }
-    var disability by remember { mutableStateOf(passenger.disability) }
+    // Dropdowns
+    var genderExpanded by remember { mutableStateOf(false) }
+    var disabilityExpanded by remember { mutableStateOf(false) }
+    var pickupExpanded by remember { mutableStateOf(false) }
+    var dropExpanded by remember { mutableStateOf(false) }
 
-    // pickup/drop choices derivation
-    val stopNames = remember(stops) { stops.keys.toList() }
-    var pickupName by remember { mutableStateOf(if (stopNames.isNotEmpty()) stopNames.first() else "") }
-    var dropName by remember { mutableStateOf(if (stopNames.isNotEmpty()) stopNames.last() else "") }
+    val stopNames = stops.keys.toList()
 
-    // set the Location objects (nullable until stops are available)
-    val pickupLocation: Location? = stops[pickupName]
-    val dropLocation: Location? = stops[dropName]
-
-    // dropdown expanded states
-    var expandedGender by remember { mutableStateOf(false) }
-    var expandedDisability by remember { mutableStateOf(false) }
-    var expandedPickup by remember { mutableStateOf(false) }
-    var expandedDrop by remember { mutableStateOf(false) }
-
-    // When the passenger object changes externally, sync local state
-    LaunchedEffect(passenger) {
-        name = passenger.name
-        age = passenger.age
-        gender = passenger.gender
-        disability = passenger.disability
-
-        // if passenger already had pickup/drop, prefer them (fallback to first/last stops)
-        passenger.pickupStopId?.let { id ->
-            if (stops.containsKey(id)) pickupName = id
-        }
-        passenger.dropStopId?.let { id ->
-            if (stops.containsKey(id)) dropName = id
-        }
-    }
-
-    // helper to build an updated passenger and call onUpdate
-    fun saveLocalToModel() {
-        val updated = passenger.copy(
-            name = name,
-            age = age,
-            gender = gender,
-            disability = disability,
-            pickupLocation = pickupLocation,
-            dropLocation = dropLocation,
-            pickupStopId = pickupName,
-            dropStopId = dropName
+    fun updateModel() {
+        onUpdate(
+            passenger.copy(
+                name = name,
+                age = age.toIntOrNull() ?: 18,
+                gender = gender,
+                disability = disability
+            )
         )
-        onUpdate(updated)
     }
 
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Card(
+        elevation = CardDefaults.cardElevation(6.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        shape = RoundedCornerShape(16.dp)
     ) {
-        // Header
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
+        Column(
+            modifier = Modifier
+                .padding(24.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    "Passenger ${index + 1} of $total",
-                    style = MaterialTheme.typography.headlineSmall.copy(
-                        color = navyBlue,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-                Text(
-                    text = "Provide passenger details and pick-up / drop-off stops",
-                    style = MaterialTheme.typography.bodySmall.copy(color = grayText)
-                )
-            }
-            // small avatar placeholder
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(goldenYellow),
-                contentAlignment = Alignment.Center
-            ) {
-                Text((index + 1).toString(), color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        }
-
-        // Name
-        OutlinedTextField(
-            value = name,
-            onValueChange = {
-                name = it
-                // optimistic update
-                onUpdate(passenger.copy(name = it))
-            },
-            label = { Text("Full name") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.colors().copy(
-                //focusedBorderColor = navyBlue,
-                cursorColor = navyBlue
-            )
-        )
-
-        // Age
-        OutlinedTextField(
-            value = age,
-            onValueChange = {
-                if (it.all { ch -> ch.isDigit() } && it.length <= 3) {
-                    age = it
-                    onUpdate(passenger.copy(age = it))
+            // Avatar Header
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(40.dp)
+                        .background(Color(0xFFFFC107), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("${index + 1}", color = Color.White, fontWeight = FontWeight.Bold)
                 }
-            },
-            label = { Text("Age") },
-            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            colors = TextFieldDefaults.colors().copy(
-                //focusedBorderColor = navyBlue,
-                cursorColor = navyBlue
-            )
-        )
+                Spacer(Modifier.width(12.dp))
+                Text(
+                    "Passenger Details",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+            }
 
-        // Gender
-        ExposedDropdownMenuBox(
-            expanded = expandedGender,
-            onExpandedChange = { expandedGender = !expandedGender }
-        ) {
+            Divider(color = Color.LightGray.copy(alpha = 0.3f))
+
+            // Inputs
             OutlinedTextField(
-                value = gender,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Gender") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedGender) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
-                colors = TextFieldDefaults.colors().copy(
-                    //focusedBorderColor = navyBlue
-                )
+                value = name,
+                onValueChange = { name = it; updateModel() },
+                label = { Text("Full Name") },
+                modifier = Modifier.fillMaxWidth(),
+                leadingIcon = { Icon(Icons.Default.Person, null) }
             )
-            ExposedDropdownMenu(
-                expanded = expandedGender,
-                onDismissRequest = { expandedGender = false }
-            ) {
-                val genders = listOf("Male", "Female", "Other")
-                genders.forEach { g ->
-                    DropdownMenuItem(
-                        text = { Text(g) },
-                        onClick = {
-                            gender = g
-                            onUpdate(passenger.copy(gender = g))
-                            expandedGender = false
-                        }
-                    )
-                }
-            }
-        }
 
-        // Disability
-        ExposedDropdownMenuBox(
-            expanded = expandedDisability,
-            onExpandedChange = { expandedDisability = !expandedDisability }
-        ) {
-            OutlinedTextField(
-                value = disability,
-                onValueChange = {},
-                readOnly = true,
-                label = { Text("Disability (if any)") },
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDisability) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor(),
-                colors = TextFieldDefaults.colors().copy(
-                    //focusedBorderColor = navyBlue
-                )
-            )
-            ExposedDropdownMenu(
-                expanded = expandedDisability,
-                onDismissRequest = { expandedDisability = false }
-            ) {
-                val disabilities =
-                    listOf("None", "Wheelchair", "Visual Impairment", "Hearing Impairment", "Other")
-                disabilities.forEach { d ->
-                    DropdownMenuItem(
-                        text = { Text(d) },
-                        onClick = {
-                            disability = d
-                            onUpdate(passenger.copy(disability = d))
-                            expandedDisability = false
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedTextField(
+                    value = age,
+                    onValueChange = {
+                        if (it.all { c -> c.isDigit() }) {
+                            age = it; updateModel()
                         }
-                    )
-                }
-            }
-        }
-
-        // Pickup / Drop section
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = CardDefaults.cardColors(containerColor = Color(0xFFF8F8F8))
-        ) {
-            Column(
-                modifier = Modifier.padding(12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    "Pickup & Drop-off",
-                    style = MaterialTheme.typography.titleSmall.copy(color = navyBlue)
+                    },
+                    label = { Text("Age") },
+                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                    modifier = Modifier.weight(1f)
                 )
 
-                if (stopNames.isEmpty()) {
-                    // no stops — friendly message
-                    Text(
-                        "No route stops available. Please go back to Route Selection and choose departure/route so stops can be fetched.",
-                        style = MaterialTheme.typography.bodySmall.copy(color = Color.Red)
+                // Gender Dropdown
+                ExposedDropdownMenuBox(
+                    expanded = genderExpanded,
+                    onExpandedChange = { genderExpanded = !genderExpanded },
+                    modifier = Modifier.weight(1f)
+                ) {
+                    OutlinedTextField(
+                        value = gender,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Gender") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = genderExpanded) },
+                        modifier = Modifier.menuAnchor()
                     )
-                } else {
-                    // Pickup
-                    ExposedDropdownMenuBox(
-                        expanded = expandedPickup,
-                        onExpandedChange = { expandedPickup = !expandedPickup }
+                    ExposedDropdownMenu(
+                        expanded = genderExpanded,
+                        onDismissRequest = { genderExpanded = false }
                     ) {
-                        OutlinedTextField(
-                            value = pickupName,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Pickup stop") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedPickup) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            colors = TextFieldDefaults.colors().copy(
-                                //focusedBorderColor = deepGreen
-                            )
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expandedPickup,
-                            onDismissRequest = { expandedPickup = false }
-                        ) {
-                            stopNames.forEach { nameKey ->
-                                DropdownMenuItem(
-                                    text = { Text(nameKey) },
-                                    onClick = {
-                                        pickupName = nameKey
-                                        onUpdate(
-                                            passenger.copy(
-                                                pickupStopId = nameKey,
-                                                pickupLocation = stops[nameKey]
-                                            )
-                                        )
-                                        expandedPickup = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-
-                    // Drop
-                    ExposedDropdownMenuBox(
-                        expanded = expandedDrop,
-                        onExpandedChange = { expandedDrop = !expandedDrop }
-                    ) {
-                        OutlinedTextField(
-                            value = dropName,
-                            onValueChange = {},
-                            readOnly = true,
-                            label = { Text("Drop-off stop") },
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDrop) },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .menuAnchor(),
-                            colors = TextFieldDefaults.colors().copy(
-                                //focusedBorderColor = deepGreen
-                            )
-                        )
-                        ExposedDropdownMenu(
-                            expanded = expandedDrop,
-                            onDismissRequest = { expandedDrop = false }
-                        ) {
-                            stopNames.forEach { nameKey ->
-                                DropdownMenuItem(
-                                    text = { Text(nameKey) },
-                                    onClick = {
-                                        dropName = nameKey
-                                        onUpdate(
-                                            passenger.copy(
-                                                dropStopId = nameKey,
-                                                dropLocation = stops[nameKey]
-                                            )
-                                        )
-                                        expandedDrop = false
-                                    }
-                                )
-                            }
+                        listOf("Male", "Female", "Other").forEach { item ->
+                            DropdownMenuItem(
+                                text = { Text(item) },
+                                onClick = { gender = item; updateModel(); genderExpanded = false })
                         }
                     }
                 }
             }
-        }
 
-        Spacer(Modifier.height(8.dp))
-
-        // Navigation buttons: Back and Next (Next disabled if required fields missing)
-        Row(horizontalArrangement = Arrangement.SpaceBetween, modifier = Modifier.fillMaxWidth()) {
-            OutlinedButton(
-                onClick = {
-                    // Save and go back
-                    saveLocalToModel()
-                    onBack()
-                },
-                shape = RoundedCornerShape(12.dp)
+            // Disability Dropdown
+            ExposedDropdownMenuBox(
+                expanded = disabilityExpanded,
+                onExpandedChange = { disabilityExpanded = !disabilityExpanded }
             ) {
-                Text("Back")
+                OutlinedTextField(
+                    value = disability.ifEmpty { "None" },
+                    onValueChange = {},
+                    readOnly = true,
+                    label = { Text("Disability / Special Needs") },
+                    trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = disabilityExpanded) },
+                    modifier = Modifier
+                        .menuAnchor()
+                        .fillMaxWidth(),
+                    leadingIcon = { Icon(Icons.Default.Favorite, null) }
+                )
+                ExposedDropdownMenu(
+                    expanded = disabilityExpanded,
+                    onDismissRequest = { disabilityExpanded = false }) {
+                    listOf(
+                        "None",
+                        "Wheelchair",
+                        "Visual Impairment",
+                        "Hearing Impairment",
+                        "Other"
+                    ).forEach { item ->
+                        DropdownMenuItem(
+                            text = { Text(item) },
+                            onClick = {
+                                disability = item; updateModel(); disabilityExpanded = false
+                            })
+                    }
+                }
             }
 
-            val isValid = name.isNotBlank() && age.isNotBlank() && stopNames.isNotEmpty()
-            Button(
-                onClick = {
-                    // save and next
-                    saveLocalToModel()
-                    onNext()
-                },
-                enabled = isValid,
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = deepGreen)
-            ) {
-                Text(if (index == total - 1) "Finish" else "Next", color = Color.White)
+            // Stops (If available)
+            if (stopNames.isNotEmpty()) {
+                Text(
+                    "Route Details",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = Color(0xFF0B1D39)
+                )
+
+                // Pickup
+                ExposedDropdownMenuBox(
+                    expanded = pickupExpanded,
+                    onExpandedChange = { pickupExpanded = !pickupExpanded }) {
+                    // FIX: Safe access to pickupStopId which now exists in Passenger
+                    val currentPickup = passenger.pickupStopId ?: "Select Pickup"
+
+                    OutlinedTextField(
+                        value = currentPickup,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Pickup") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = pickupExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFFE8F5E9),
+                            unfocusedContainerColor = Color(0xFFF1F8E9)
+                        )
+                    )
+                    ExposedDropdownMenu(
+                        expanded = pickupExpanded,
+                        onDismissRequest = { pickupExpanded = false }) {
+                        stopNames.forEach { stop ->
+                            DropdownMenuItem(
+                                text = { Text(stop) },
+                                onClick = {
+                                    // FIX: Update using the new fields
+                                    onUpdate(
+                                        passenger.copy(
+                                            pickupStopId = stop,
+                                            pickupLocation = stops[stop]
+                                        )
+                                    )
+                                    pickupExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(8.dp))
+
+                // Drop
+                ExposedDropdownMenuBox(
+                    expanded = dropExpanded,
+                    onExpandedChange = { dropExpanded = !dropExpanded }) {
+                    // FIX: Safe access to dropStopId
+                    val currentDrop = passenger.dropStopId ?: "Select Drop-off"
+
+                    OutlinedTextField(
+                        value = currentDrop,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text("Drop-off") },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = dropExpanded) },
+                        modifier = Modifier
+                            .menuAnchor()
+                            .fillMaxWidth(),
+                        colors = TextFieldDefaults.colors(
+                            focusedContainerColor = Color(0xFFE8F5E9),
+                            unfocusedContainerColor = Color(0xFFF1F8E9)
+                        )
+                    )
+                    ExposedDropdownMenu(
+                        expanded = dropExpanded,
+                        onDismissRequest = { dropExpanded = false }) {
+                        stopNames.forEach { stop ->
+                            DropdownMenuItem(
+                                text = { Text(stop) },
+                                onClick = {
+                                    // FIX: Update using the new fields
+                                    onUpdate(
+                                        passenger.copy(
+                                            dropStopId = stop,
+                                            dropLocation = stops[stop]
+                                        )
+                                    )
+                                    dropExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+
+            // Navigation Buttons
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                OutlinedButton(onClick = onBack) { Text("Back") }
+                Button(
+                    onClick = { updateModel(); onNext() },
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF008800))
+                ) {
+                    Text(if (index == total - 1) "Finish" else "Next")
+                }
             }
         }
     }
 }
 
 @Composable
-fun CSVFilePickerScreen(onParsed: (List<Passenger>) -> Unit) {
+fun CSVFilePickerScreen(onParsed: (List<Passenger>) -> Unit, onCancel: () -> Unit) {
     val context = LocalContext.current
-    var error by remember { mutableStateOf("") }
+    var errorMsg by remember { mutableStateOf("") }
+
     val launcher =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
             uri?.let {
                 try {
-                    val passengers = readCsvFromUri(context, it)
-                    onParsed(passengers)
+                    val list = readCsvFromUri(context, it)
+                    if (list.isNotEmpty()) onParsed(list) else errorMsg =
+                        "File is empty or invalid format."
                 } catch (e: Exception) {
-                    error = "Failed to read CSV: ${e.message}"
+                    errorMsg = "Error: ${e.localizedMessage}"
                 }
             }
         }
 
     Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+        Modifier.fillMaxSize(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
     ) {
-        Text(
-            "Select a CSV file with format: Name,Age,Gender,Disability",
-            style = MaterialTheme.typography.bodyLarge
+        Icon(
+            Icons.Default.DateRange,
+            null,
+            modifier = Modifier.size(80.dp),
+            tint = Color(0xFF0B1D39)
         )
-        Button(onClick = {
-            launcher.launch(arrayOf("text/csv", "text/comma-separated-values", "application/csv"))
-        }) {
-            Text("Pick CSV File")
+        Spacer(Modifier.height(16.dp))
+        Text("Import Passenger List", style = MaterialTheme.typography.headlineSmall)
+        Text("Supports .csv files", color = Color.Gray)
+        Spacer(Modifier.height(32.dp))
+        Button(
+            onClick = { launcher.launch(arrayOf("text/csv", "text/comma-separated-values")) },
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B1D39))
+        ) {
+            Text("Select File")
         }
-        if (error.isNotEmpty()) {
-            Text(error, color = MaterialTheme.colorScheme.error)
+        TextButton(onClick = onCancel) { Text("Cancel") }
+
+        if (errorMsg.isNotEmpty()) {
+            Spacer(Modifier.height(16.dp))
+            Text(errorMsg, color = MaterialTheme.colorScheme.error)
         }
     }
 }
 
-fun readCsvFromUri(context: Context, uri: android.net.Uri): List<Passenger> {
+fun readCsvFromUri(context: Context, uri: Uri): List<Passenger> {
     val passengers = mutableListOf<Passenger>()
-    context.contentResolver.openInputStream(uri)?.use { inputStream ->
-        BufferedReader(InputStreamReader(inputStream)).use { reader ->
-            val lines = reader.readLines()
+    context.contentResolver.openInputStream(uri)?.use { stream ->
+        BufferedReader(InputStreamReader(stream)).use { reader ->
+            reader.lineSequence().forEachIndexed { index, line ->
+                // Skip header if it exists
+                if (index == 0 && line.lowercase().contains("name")) return@forEachIndexed
 
-            if (lines.isEmpty()) return passengers
-
-            val firstRow = lines.first().split(",").map { it.trim().lowercase() }
-            val isHeader = firstRow.containsAll(listOf("name", "age", "gender", "disability"))
-
-            val dataLines = if (isHeader) lines.drop(1) else lines
-
-            dataLines.forEach { line ->
                 val parts = line.split(",").map { it.trim() }
                 if (parts.size >= 4) {
                     passengers.add(
                         Passenger(
+                            id = UUID.randomUUID().toString(),
                             name = parts[0],
-                            age = parts[1],
+                            age = parts[1].toIntOrNull() ?: 18,
                             gender = parts[2],
                             disability = parts[3]
                         )
@@ -1035,125 +797,128 @@ fun SummaryScreen(
     onUpdatePassenger: (Int, Passenger) -> Unit,
     onSeatLayoutSelect: () -> Unit
 ) {
-    val selected = remember { mutableStateListOf<Int>() }
+    val selectedIndices = remember { mutableStateListOf<Int>() }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(20.dp),
-        verticalArrangement = Arrangement.SpaceBetween
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // Header
-        Text(
-            "Passenger Summary",
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold
-        )
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Review Passengers",
+                style = MaterialTheme.typography.headlineSmall,
+                color = Color(0xFF0B1D39)
+            )
+            Text(
+                "Select passengers to group them together (AI will try to seat them nearby).",
+                style = MaterialTheme.typography.bodyMedium,
+                color = Color.Gray,
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
 
-        Spacer(Modifier.height(16.dp))
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                itemsIndexed(passengers) { index, p ->
+                    val isSelected = selectedIndices.contains(index)
+                    val isGrouped = !p.groupId.isNullOrEmpty() && p.groupId != "GRP-001"
 
-        // Passenger list
-        LazyColumn(
-            modifier = Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            itemsIndexed(passengers) { index, p ->
-                Card(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(
-                        containerColor = if (selected.contains(index))
-                            MaterialTheme.colorScheme.primaryContainer
-                        else
-                            MaterialTheme.colorScheme.surface
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable {
-                            if (selected.contains(index)) selected.remove(index)
-                            else selected.add(index)
-                        }
-                        .shadow(4.dp, RoundedCornerShape(16.dp))
-                ) {
-                    Row(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                "${p.name}, Age ${p.age}",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                            Text("Gender: ${p.gender}", style = MaterialTheme.typography.bodyMedium)
-                            Text(
-                                "Disability: ${p.disability}",
-                                style = MaterialTheme.typography.bodyMedium
-                            )
-                            Text(
-                                "Pickup: ${p.pickupLocation}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                            Text(
-                                "Drop-off: ${p.dropLocation}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-
-                            if (p.groupId?.isNotEmpty() ?: false) {
-                                Text(
-                                    "Group: ${((p.groupId?.take(6)) ?: "")}…",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary
+                            .clickable {
+                                if (isSelected) selectedIndices.remove(index) else selectedIndices.add(
+                                    index
                                 )
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isSelected) Color(0xFFE3F2FD) else Color.White
+                        ),
+                        border = if (isSelected) androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            Color(0xFF2196F3)
+                        ) else null
+                    ) {
+                        Row(
+                            Modifier.padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(checked = isSelected, onCheckedChange = null)
+                            Spacer(Modifier.width(8.dp))
+                            Column {
+                                Text(p.name, fontWeight = FontWeight.Bold)
+                                Text(
+                                    "${p.gender}, ${p.age} years",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+
+                                if (p.pickupStopId != null) {
+                                    Text(
+                                        "From: ${p.pickupStopId} To: ${p.dropStopId ?: "?"}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = Color.Gray
+                                    )
+                                }
+
+                                if (isGrouped) {
+                                    Surface(
+                                        color = Color(0xFFE8F5E9),
+                                        shape = RoundedCornerShape(4.dp),
+                                        modifier = Modifier.padding(top = 4.dp)
+                                    ) {
+                                        Text(
+                                            "Grouped",
+                                            modifier = Modifier.padding(
+                                                horizontal = 6.dp,
+                                                vertical = 2.dp
+                                            ),
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color(0xFF2E7D32)
+                                        )
+                                    }
+                                }
                             }
                         }
-
-                        Checkbox(
-                            checked = selected.contains(index),
-                            onCheckedChange = {
-                                if (it) selected.add(index) else selected.remove(index)
-                            }
-                        )
                     }
                 }
             }
         }
 
-        Spacer(Modifier.height(20.dp))
-
-        // Group creation button
-        Button(
-            onClick = {
-                if (selected.isNotEmpty()) {
-                    val groupId = UUID.randomUUID().toString()
-                    selected.forEach { idx ->
-                        val p = passengers[idx]
-                        onUpdatePassenger(idx, p.copy(groupId = groupId))
-                    }
-                    selected.clear()
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            // Group Action
+            if (selectedIndices.size > 1) {
+                OutlinedButton(
+                    onClick = {
+                        val newGroup = UUID.randomUUID().toString().take(8)
+                        selectedIndices.forEach { i ->
+                            onUpdatePassenger(i, passengers[i].copy(groupId = newGroup))
+                        }
+                        selectedIndices.clear()
+                    },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Default.Add, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Create Group with Selected (${selectedIndices.size})")
                 }
-            },
-            enabled = selected.size >= 2,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Text("Create Group")
-        }
+            }
 
-        Spacer(Modifier.height(12.dp))
-
-        // Proceed button
-        Button(
-            onClick = onSeatLayoutSelect,
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-        ) {
-            Text("Proceed to Seat Layout Selection")
+            // Proceed Action
+            Button(
+                onClick = onSeatLayoutSelect,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B1D39))
+            ) {
+                Text(
+                    "Proceed to Seat Selection",
+                    fontSize = androidx.compose.ui.unit.TextUnit.Unspecified
+                )
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowForward, null)
+            }
         }
     }
 }

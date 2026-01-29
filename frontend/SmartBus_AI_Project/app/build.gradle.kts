@@ -65,6 +65,9 @@ dependencies {
     kapt("com.google.dagger:hilt-android-compiler:2.56.2")
     implementation("androidx.hilt:hilt-navigation-compose:1.2.0")
 
+    // Material Icons Extended
+    implementation("androidx.compose.material:material-icons-extended:1.7.8")
+
     //Retrofit & Gson Converter
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     implementation("com.squareup.retrofit2:converter-gson:3.0.0")

@@ -30,82 +30,158 @@ class SearchViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val _query = mutableStateOf("")
-    val query: State<String> = _query
+    // --- API Results ---
+    private val _predictions = MutableStateFlow<List<Prediction>>(emptyList())
+    val predictions: StateFlow<List<Prediction>> = _predictions
 
-    private val _results = MutableStateFlow<List<Prediction>>(emptyList())
-    val results: StateFlow<List<Prediction>> = _results
+    // --- Departure State ---
+    private val _departureText = mutableStateOf("")
+    val departureText: State<String> = _departureText
 
-    var selectedDeparture = mutableStateOf<PlaceDetails?>(null)
-        private set
+    private val _selectedDeparture = mutableStateOf<PlaceDetails?>(null)
+    val selectedDeparture: State<PlaceDetails?> = _selectedDeparture
 
-    var selectedDestination = mutableStateOf("")
-        private set
+    // --- Destination State ---
+    private val _destinationText = mutableStateOf("")
+    val destinationText: State<String> = _destinationText
 
+    private val _selectedDestination = mutableStateOf<PlaceDetails?>(null)
+    val selectedDestination: State<PlaceDetails?> = _selectedDestination
+
+    // --- Intermediate Stops State ---
+    // UI Text for each stop
+    val intermediateStopsText = mutableStateListOf<String>()
+
+    // Selected Objects for each stop (nullable if not selected yet)
+    val intermediateStopsDetails = mutableListOf<PlaceDetails?>()
+
+    // --- Coordinate Map (For final routing) ---
     private val _placeLatLngMap = MutableStateFlow<Map<String, Location>>(emptyMap())
     val placeLatLngMap: StateFlow<Map<String, Location>> = _placeLatLngMap
 
-    private val intermediateStopIds = mutableListOf<String>()
-    private val _departureStopId = mutableStateOf<String?>(null)
-    val departureStopId: State<String?> = _departureStopId
-    private val _destinationStopId = mutableStateOf<String?>(null)
-    val destinationStopId: State<String?> = _destinationStopId
-    val intermediateStops = mutableStateListOf<String>()
+    // ---------------------------------------------------------
+    // Actions
+    // ---------------------------------------------------------
 
-    fun updateQuery(newQuery: String) {
-        _query.value = newQuery
-    }
-
-    fun updateDeparture(description: String, placeId: String) {
-        selectedDeparture.value = PlaceDetails(description, placeId)
-        _departureStopId.value = placeId
-    }
-
-    fun updateDestination(newDestination: String) {
-        selectedDestination.value = newDestination
-    }
-
-    fun updateDestinationStopId(newId: String) {
-        _destinationStopId.value = newId
-    }
-
-    fun updateIntermediateStop(index: Int, newText: String) {
-        if (index in intermediateStops.indices) {
-            intermediateStops[index] = newText
+    // -- Departure --
+    fun onDepartureQueryChange(newText: String) {
+        _departureText.value = newText
+        // If user is typing, invalidate previous selection until they pick again
+        if (_selectedDeparture.value?.description != newText) {
+            _selectedDeparture.value = null
         }
+        fetchPredictions(newText)
     }
 
-    fun updateIntermediateStopPlaceId(index: Int, newPlaceId: String) {
-        if (index in intermediateStopIds.indices) {
-            intermediateStopIds[index] = newPlaceId
+    fun onDepartureSelected(prediction: Prediction) {
+        _departureText.value = prediction.description
+        _selectedDeparture.value = PlaceDetails(prediction.description, prediction.place_id)
+        clearPredictions()
+    }
+
+    // -- Destination --
+    fun onDestinationQueryChange(newText: String) {
+        _destinationText.value = newText
+        if (_selectedDestination.value?.description != newText) {
+            _selectedDestination.value = null
         }
+        fetchPredictions(newText)
     }
 
+    fun onDestinationSelected(prediction: Prediction) {
+        _destinationText.value = prediction.description
+        _selectedDestination.value = PlaceDetails(prediction.description, prediction.place_id)
+        clearPredictions()
+    }
+
+    // -- Intermediate Stops --
     fun addIntermediateStop() {
-        intermediateStops.add("")
-        intermediateStopIds.add("")
+        intermediateStopsText.add("")
+        intermediateStopsDetails.add(null)
     }
 
     fun removeIntermediateStop(index: Int) {
-        if (index in intermediateStops.indices) {
-            intermediateStops.removeAt(index)
-            if (index in intermediateStopIds.indices) {
-                intermediateStopIds.removeAt(index)
+        if (index in intermediateStopsText.indices) {
+            intermediateStopsText.removeAt(index)
+            intermediateStopsDetails.removeAt(index)
+        }
+    }
+
+    fun onIntermediateQueryChange(index: Int, newText: String) {
+        if (index in intermediateStopsText.indices) {
+            intermediateStopsText[index] = newText
+            intermediateStopsDetails[index] = null // Invalidate selection while typing
+            fetchPredictions(newText)
+        }
+    }
+
+    fun onIntermediateStopSelected(index: Int, prediction: Prediction) {
+        if (index in intermediateStopsText.indices) {
+            intermediateStopsText[index] = prediction.description
+            intermediateStopsDetails[index] =
+                PlaceDetails(prediction.description, prediction.place_id)
+            clearPredictions()
+        }
+    }
+
+    // ---------------------------------------------------------
+    // API Logic
+    // ---------------------------------------------------------
+
+    private fun fetchPredictions(query: String) {
+        viewModelScope.launch {
+            if (query.length < 3) {
+                _predictions.value = emptyList()
+                return@launch
+            }
+            try {
+                val response =
+                    PlacesApiRetrofitClient.api.getAutocomplete(query, Constants.PLACES_API_KEY)
+                if (response.status == "OK") {
+                    _predictions.value = response.predictions
+                } else {
+                    _predictions.value = emptyList()
+                }
+            } catch (e: Exception) {
+                Log.e("SearchViewModel", "Search Error", e)
+                _predictions.value = emptyList()
             }
         }
     }
 
-    fun searchPlaces(query: String, apiKey: String) {
+    private fun clearPredictions() {
+        _predictions.value = emptyList()
+    }
+
+    // ---------------------------------------------------------
+    // Coordinate Resolution (Called before navigation)
+    // ---------------------------------------------------------
+    fun fetchLatLngFromPlaceId() {
         viewModelScope.launch {
             try {
-                val response = PlacesApiRetrofitClient.api.getAutocomplete(query, apiKey)
-                if (response.status == "OK") {
-                    _results.value = response.predictions
-                } else {
-                    Log.d("SearchViewModel", "Error: ${response.status}")
+                val deferredResults = mutableListOf<Deferred<Pair<String, Location>>>()
+
+                // Departure
+                _selectedDeparture.value?.let { place ->
+                    deferredResults.add(async { place.placeId to getLatLngFromPlaceId(place.placeId) })
                 }
+
+                // Intermediate
+                intermediateStopsDetails.filterNotNull().forEach { place ->
+                    deferredResults.add(async { place.placeId to getLatLngFromPlaceId(place.placeId) })
+                }
+
+                // Destination
+                _selectedDestination.value?.let { place ->
+                    deferredResults.add(async { place.placeId to getLatLngFromPlaceId(place.placeId) })
+                }
+
+                val results = deferredResults.awaitAll().toMap()
+                _placeLatLngMap.value = results
+                Log.d("SearchViewModel", "Fetched ${results.size} locations")
+
             } catch (e: Exception) {
-                Log.e("SearchViewModel", "Search failed", e)
+                Log.e("SearchViewModel", "Error fetching coordinates", e)
             }
         }
     }
@@ -115,35 +191,7 @@ class SearchViewModel @Inject constructor(
             placeId = placeId,
             apiKey = Constants.PLACES_API_KEY
         )
-
-        val location = response.result?.geometry?.location
-            ?: throw IllegalStateException("No geometry found for placeId: $placeId")
-
-        return Location(location.lat, location.lng)
-    }
-
-    fun fetchLatLngFromPlaceId() {
-        viewModelScope.launch {
-            try {
-                val deferredResults = mutableListOf<Deferred<Pair<String, Location>>>()
-
-                _departureStopId.value?.let { depId ->
-                    deferredResults.add(async { depId to getLatLngFromPlaceId(depId) })
-                }
-
-                intermediateStopIds.forEach { stopId ->
-                    deferredResults.add(async { stopId to getLatLngFromPlaceId(stopId) })
-                }
-
-                _destinationStopId.value?.let { destId ->
-                    deferredResults.add(async { destId to getLatLngFromPlaceId(destId) })
-                }
-
-                _placeLatLngMap.value = deferredResults.awaitAll().toMap()
-
-            } catch (e: Exception) {
-                Log.e("SearchViewModel", "Error fetching coordinates", e)
-            }
-        }
+        return response.result?.geometry?.location
+            ?: throw IllegalStateException("No geometry for $placeId")
     }
 }

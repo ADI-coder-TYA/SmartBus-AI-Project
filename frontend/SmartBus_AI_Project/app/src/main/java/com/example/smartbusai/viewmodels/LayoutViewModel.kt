@@ -18,20 +18,37 @@ class LayoutViewModel @Inject constructor() : ViewModel() {
         val seats = mutableListOf<Seat>()
         for (r in 0 until rows) {
             for (c in 0 until cols) {
+                // Generate labels: 1A, 1B, 1C, 1D...
+                // This matches typical backend/AI standard
                 val seatNum = "${r + 1}${('A' + c)}"
+
+                // Determine Seat Type logic
+                val seatType = when {
+                    c == 0 || c == cols - 1 -> SeatType.WINDOW
+                    // If it's a 5-seater row, the middle one (index 2) is regular
+                    cols == 5 && c == 2 -> SeatType.REGULAR
+                    else -> SeatType.AISLE
+                }
+
                 seats.add(
                     Seat(
                         row = r,
                         col = c,
                         seatNumber = seatNum,
-                        type = when {
-                            c == 0 || c == cols - 1 -> SeatType.WINDOW
-                            else -> SeatType.AISLE
-                        }
+                        type = seatType,
+                        isAvailable = true // Default to true
                     )
                 )
             }
         }
         _layout.value = VehicleLayout(rows, cols, seats, type)
+    }
+
+    /**
+     * Helper to find a specific seat object by its label (e.g., "1A")
+     * usage: layoutViewModel.getSeatByLabel("1A")
+     */
+    fun getSeatByLabel(label: String): Seat? {
+        return _layout.value?.seats?.find { it.seatNumber == label }
     }
 }

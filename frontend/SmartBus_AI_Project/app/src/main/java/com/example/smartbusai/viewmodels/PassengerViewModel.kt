@@ -3,35 +3,55 @@ package com.example.smartbusai.viewmodels
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.smartbusai.BackendAPIConnector.RetrofitClient
 import com.example.smartbusai.ui.passengers.InputMode
+import com.example.smartbusai.util.FeedbackRequest
 import com.example.smartbusai.util.Passenger
+import com.example.smartbusai.util.SeatAssignment
+import com.example.smartbusai.util.SeatRequest
+import com.example.smartbusai.util.VehicleConfig
+import com.example.smartbusai.util.VehicleLayout
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 
 @HiltViewModel
 class PassengerViewModel @Inject constructor() : ViewModel() {
 
-    // Backing state for list of passengers
+    // --- State ---
+
+    // List of passengers
     private val _passengers = MutableStateFlow<List<Passenger>>(emptyList())
     val passengers: StateFlow<List<Passenger>> = _passengers
 
-    // Track input mode (Manual, CSV, etc.)
+    // Input mode (Manual vs CSV)
     private val _inputMode = MutableStateFlow(InputMode.NONE)
     val inputMode: StateFlow<InputMode> = _inputMode
 
-    // Track whether passenger entry is completed
+    // Track if user is done entering details and viewing Summary
     private val _isFinished = MutableStateFlow(false)
     val isFinished: StateFlow<Boolean> = _isFinished
 
-    // Set input mode (called from UI)
+    // API Status
+    private val _allocationStatus = MutableStateFlow<String?>(null)
+    val allocationStatus: StateFlow<String?> = _allocationStatus
+
+    // Navigation Trigger
+    private val _navigateToNext = MutableStateFlow(false)
+    val navigateToNext: StateFlow<Boolean> = _navigateToNext
+
+    // --- Actions ---
+
     fun setInputMode(mode: InputMode) {
         _inputMode.value = mode
+        // Reset finished state if we change modes, unless we are just viewing
+        if (mode == InputMode.NONE) _isFinished.value = false
     }
 
-    // Initialize passenger list (Manual mode)
     fun initPassengers(count: Int) {
         if (count > 0) {
             _passengers.value = List(count) { Passenger() }
@@ -39,7 +59,6 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // Update a passenger at specific index
     fun updatePassenger(index: Int, passenger: Passenger) {
         val currentList = _passengers.value.toMutableList()
         if (index in currentList.indices) {
@@ -48,83 +67,110 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
         }
     }
 
-    // Add passengers from CSV
+    // Called when CSV is parsed
     fun setPassengersFromCsv(list: List<Passenger>) {
         _passengers.value = list
-        _isFinished.value = true
+        _isFinished.value = true // Jump straight to summary
     }
 
-    // Mark process as finished
+    // Called when manual entry loop is done
     fun markFinished() {
         _isFinished.value = true
     }
 
-    // Clear all passengers
+    // Reset everything (e.g. Cancel button)
     fun reset() {
         _passengers.value = emptyList()
         _inputMode.value = InputMode.NONE
         _isFinished.value = false
+        _allocationStatus.value = null
     }
 
-    // Debug helper for logging
-    fun debugPrintPassengers() {
+    // --- Backend Logic ---
+
+    fun allocateSeats(layout: VehicleLayout) {
         viewModelScope.launch {
-            _passengers.value.forEachIndexed { index, passenger ->
-                Log.d("PassengerViewModel", "Passenger $index: $passenger")
-            }
-        }
-    }
+            _allocationStatus.value = "Allocating..."
 
-    fun assignSeat(passengerId: String, seatNumber: String) {
-        _passengers.value = _passengers.value.map {
-            if (it.id == passengerId) it.copy(seatNumber = seatNumber) else it
-        }
-    }
-
-    private val _allocationResult = MutableStateFlow<String?>(null)
-    val allocationResult: StateFlow<String?> = _allocationResult
-
-    fun allocateSeats(passengersFromUi: List<PassengerData>) {
-        viewModelScope.launch {
             try {
-                // 1. Convert UI Data to API Data
-                val apiPassengers = passengersFromUi.map { uiPassenger ->
-                    PassengerApiRequest(
-                        id = UUID.randomUUID().toString().substring(0, 8), // Generate temp ID
-                        pnr = "PNR-${System.currentTimeMillis()}",
-                        name = uiPassenger.name,
-                        age = uiPassenger.age.toIntOrNull() ?: 25, // Fallback if parse fails
-                        gender = uiPassenger.gender,
-                        groupId = "GRP-001" // Assume they are travelling together
-                    )
-                }
+                val pnr = "PNR-${System.currentTimeMillis()}"
+                val currentPassengers = _passengers.value
 
-                // 2. Create the Request Payload
-                // We hardcode a standard bus config for now
+                // Convert UI model to API model
+                val apiPassengers = currentPassengers.map { it.toApiRequest(pnr) }
+
                 val request = SeatRequest(
                     tripId = "TRIP-${System.currentTimeMillis()}",
-                    vehicleConfig = VehicleConfig(rows = 10, cols = 4),
+                    vehicleConfig = VehicleConfig(rows = layout.rows, cols = layout.cols),
                     passengers = apiPassengers
                 )
 
-                // 3. Call the Backend
                 val response = RetrofitClient.api.allocateSeats(request)
 
                 if (response.isSuccessful && response.body() != null) {
                     val assignments = response.body()!!.assignments
-                    // Process result (e.g., show a success message or navigate)
-                    _allocationResult.value = "Allocated ${assignments.size} seats!"
-
-                    assignments.forEach { seat ->
-                        Log.d("SmartBus", "Passenger ${seat.passengerId} got seat ${seat.seatLabel}")
-                    }
+                    updatePassengerSeats(assignments)
+                    _allocationStatus.value = "Success"
+                    _navigateToNext.value = true
                 } else {
-                    _allocationResult.value = "Error: ${response.errorBody()?.string()}"
+                    val errorMsg = response.errorBody()?.string() ?: "Unknown Server Error"
+                    _allocationStatus.value = "Error: $errorMsg"
+                    Log.e("SmartBus", "Allocation Failed: $errorMsg")
                 }
 
             } catch (e: Exception) {
-                Log.e("SmartBus", "Network Error", e)
-                _allocationResult.value = "Network Error: ${e.localizedMessage}"
+                _allocationStatus.value = "Network Error: ${e.message}"
+                Log.e("SmartBus", "Exception", e)
+            }
+        }
+    }
+
+    private fun updatePassengerSeats(assignments: List<SeatAssignment>) {
+        val currentList = _passengers.value.toMutableList()
+        val updatedList = currentList.map { passenger ->
+            // Match using ID (assuming ID was sent correctly)
+            val assignment = assignments.find {
+                it.passengerId == passenger.id || it.passengerId == passenger.id.take(8)
+            }
+            if (assignment != null) {
+                passenger.copy(seatNumber = assignment.seatLabel)
+            } else {
+                passenger
+            }
+        }
+        _passengers.value = updatedList
+    }
+
+    fun onNavigationHandled() {
+        _navigateToNext.value = false
+        _allocationStatus.value = null
+    }
+
+    fun submitFeedback(rating: Int, rows: Int, cols: Int) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val currentPassengers = _passengers.value
+
+            currentPassengers.forEach { passenger ->
+                if (passenger.seatNumber != null) {
+                    try {
+                        val req = FeedbackRequest(
+                            passengerId = passenger.id, // The ID we generated earlier
+                            rating = rating,
+                            seatLabel = passenger.seatNumber,
+                            totalRows = rows,
+                            totalCols = cols
+                        )
+                        RetrofitClient.api.submitFeedback(req)
+                        Log.d("SmartBus", "Feedback sent for ${passenger.name}")
+                    } catch (e: Exception) {
+                        Log.e("SmartBus", "Failed to send feedback", e)
+                    }
+                }
+            }
+            // Navigate home after sending
+            withContext(Dispatchers.Main) {
+                reset() // Clear data for next booking
+                // navigation handled by UI observing a state, or callback
             }
         }
     }
