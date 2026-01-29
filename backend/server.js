@@ -89,14 +89,40 @@ app.post('/allocations', async (req, res) => {
     }
 });
 
-// AI calls this to get data for re-training
-app.get('/feedback', async (req, res) => {
-    // For now, return empty data structures so the AI doesn't crash.
-    // You can implement complex aggregation here later.
-    res.json({
-        seattype: [],
-        penalty: []
-    });
+// --- FEEDBACK ENDPOINT ---
+// App sends: { passengerId, rating, seatLabel, totalRows, totalCols }
+app.post('/feedback', async (req, res) => {
+    try {
+        const { passengerId, rating, seatLabel, totalRows, totalCols } = req.body;
+        
+        // 1. Parse Seat Label (e.g., "1A") back to coordinates
+        // Assuming format "1A", "10B"
+        const rowPart = seatLabel.match(/\d+/)[0]; // "1"
+        const colPart = seatLabel.match(/[A-Z]+/)[0]; // "A"
+        
+        const row = parseInt(rowPart) - 1; 
+        const col = colPart.charCodeAt(0) - 65; // 'A' -> 0, 'B' -> 1
+
+        // 2. Normalize (0.0 to 1.0) for the ML model
+        const norm_row = row / Math.max(totalRows - 1, 1);
+        const norm_col = col / Math.max(totalCols - 1, 1);
+
+        // 3. Save to History
+        const newHistory = new History({
+            passengerId: passengerId,
+            norm_row: norm_row,
+            norm_col: norm_col,
+            feedback_score: parseInt(rating) // 1 to 5
+        });
+
+        await newHistory.save();
+        console.log(`Feedback saved for ${passengerId}: Rating ${rating}`);
+        res.json({ status: "success" });
+
+    } catch (err) {
+        console.error("Feedback error:", err);
+        res.status(500).json({ error: "Failed to save feedback" });
+    }
 });
 
 // --- Start Server ---
@@ -106,3 +132,4 @@ mongoose.connect(process.env.MONGO_URI)
         app.listen(PORT, () => console.log(`Node.js server running on port ${PORT}`));
     })
     .catch(err => console.error("MongoDB connection error:", err));
+    
