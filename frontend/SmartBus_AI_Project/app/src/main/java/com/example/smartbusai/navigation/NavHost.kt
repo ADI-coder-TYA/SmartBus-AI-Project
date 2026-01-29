@@ -107,8 +107,18 @@ fun AppNavHost(
             }
 
             // --- 6. Feedback ---
-            composable("feedback") {
-                FeedbackScreen()
+            composable("feedback") { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry("main_graph")
+                }
+                val layoutViewModel = hiltViewModel<LayoutViewModel>(parentEntry)
+                val passengerViewModel = hiltViewModel<PassengerViewModel>(parentEntry)
+
+                FeedbackScreen(
+                    passengerViewModel = passengerViewModel,
+                    navController = navController,
+                    layoutViewModel = layoutViewModel
+                )
             }
         }
     }
