@@ -4,14 +4,17 @@ import android.content.Context
 import android.util.Log
 import android.widget.Toast
 import androidx.navigation.NavController
-import com.example.smartbusai.util.Route
+import com.example.smartbusai.util.PassengerApiRequest
 import com.example.smartbusai.util.SeatRequest
-import com.example.smartbusai.util.SeatResponse
-import com.example.smartbusai.util.VehicleReq
+import com.example.smartbusai.util.VehicleConfig
 import com.example.smartbusai.viewmodels.LayoutViewModel
 import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
-import com.example.streamease.helper.RetrofitClient
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.util.UUID
 
 fun onProceedButtonPressed(
     context: Context,
@@ -20,91 +23,83 @@ fun onProceedButtonPressed(
     passengerViewModel: PassengerViewModel,
     layoutViewModel: LayoutViewModel
 ) {
-    // 1) Collect route (departure/destination) locations
-    val placeMap = searchViewModel.placeLatLngMap.value           // Map<placeId, Location>
-    val selectedDep = searchViewModel.selectedDeparture.value     // PlaceDetails? (expect placeId inside)
-    val selectedDest = searchViewModel.selectedDestination.value  // String
+    // 1) Validation: Ensure Stops are selected
+    val selectedDep = searchViewModel.selectedDeparture.value
+    val selectedDest = searchViewModel.selectedDestination.value
 
     if (selectedDep == null || selectedDest.isEmpty()) {
         Toast.makeText(context, "Please select departure and destination", Toast.LENGTH_LONG).show()
         return
     }
 
-    // Resolve actual Location objects for departure & destination
-    val depLoc = placeMap[selectedDep.placeId]
-    val destLoc = placeMap[searchViewModel.destinationStopId.value]
-
-    if (depLoc == null || destLoc == null) {
-        Toast.makeText(context, "Waiting for stop coordinates to be available. Try again in a moment.", Toast.LENGTH_LONG).show()
-        // Optionally trigger a fetch:
-        searchViewModel.fetchLatLngFromPlaceId()
-        return
-    }
-
-    // 2) Layout
+    // 2) Validation: Layout
     val layout = layoutViewModel.layout.value
     if (layout == null) {
         Toast.makeText(context, "Please choose vehicle layout first", Toast.LENGTH_LONG).show()
         return
     }
 
-    // 3) Passengers
+    // 3) Validation: Passengers
     val uiPassengers = passengerViewModel.passengers.value
     if (uiPassengers.isEmpty()) {
         Toast.makeText(context, "Please add passengers first", Toast.LENGTH_LONG).show()
         return
     }
-    val vehicleRq= VehicleReq(layout.rows,layout.cols,layout.vehicleType)
-    val seatRequest = SeatRequest(
-        route = Route(departure = depLoc, destination = destLoc),
-        passengers = uiPassengers,
-        vehicle = vehicleRq
-    )
 
-    val call = RetrofitClient.instance?.api?.allocateSeats(seatRequest)
-    if (call == null) {
-        Toast.makeText(context, "Network client not initialized", Toast.LENGTH_LONG).show()
-        return
+    Toast.makeText(context, "Requesting AI Seat Allocation...", Toast.LENGTH_SHORT).show()
+
+    // 4) Prepare Data for API
+    // We map the UI 'PassengerData' to the API's 'PassengerApiRequest'
+    val apiPassengers = uiPassengers.map { uiPassenger ->
+        PassengerApiRequest(
+            id = UUID.randomUUID().toString().substring(0, 8), // Generate a temp ID
+            pnr = "PNR-${System.currentTimeMillis()}",
+            name = uiPassenger.name,
+            age = uiPassenger.age ,
+            gender = uiPassenger.gender,
+            groupId = "GRP-001" // Assumption: All booked together are one group
+        )
     }
 
-    // Optional: show a quick Toast / spinner before request
-    Toast.makeText(context, "Requesting seat assignments...", Toast.LENGTH_SHORT).show()
+    val request = SeatRequest(
+        tripId = "TRIP-${System.currentTimeMillis()}",
+        // The AI model only needs rows/cols, not the full Vehicle object
+        vehicleConfig = VehicleConfig(rows = layout.rows, cols = layout.cols),
+        passengers = apiPassengers
+    )
 
-    call.enqueue(object : retrofit2.Callback<SeatResponse> {
-        override fun onResponse(call: retrofit2.Call<SeatResponse>, response: retrofit2.Response<SeatResponse>) {
-            if (response.isSuccessful) {
-                val body = response.body()
-                if (body == null) {
-                    Toast.makeText(context, "Empty response from server", Toast.LENGTH_LONG).show()
-                    return
+    // 5) Network Call (Using Coroutines)
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            // This is the new suspend call
+            val response = RetrofitClient.api.allocateSeats(request)
+
+            withContext(Dispatchers.Main) {
+                if (response.isSuccessful && response.body() != null) {
+                    val body = response.body()!!
+
+                    // Log the results
+                    Log.d("SmartBus", "Allocated ${body.assignments.size} seats for Trip ${body.tripId}")
+
+                    // Show success
+                    Toast.makeText(context, "AI Allocation Successful!", Toast.LENGTH_SHORT).show()
+
+                    // Optional: You can update the passengerViewModel here with the new seat numbers
+                    // passengerViewModel.updateSeats(body.assignments)
+
+                    // Navigate to the next screen
+                    navController.navigate("feedback")
+                } else {
+                    val errorMsg = response.errorBody()?.string() ?: "Unknown Server Error"
+                    Toast.makeText(context, "Server Error: $errorMsg", Toast.LENGTH_LONG).show()
+                    Log.e("SmartBus", "Server Error: $errorMsg")
                 }
-
-                // body.assignments: Map<String, SeatAssignment>
-                // Keys likely are passenger ids. We'll apply seat numbers to passengers
-                val assignments = body.assignments
-
-                // Apply seat assignments to passengerViewModel
-                assignments.forEach { (passengerId, seatAssignment) ->
-                    val seatId = seatAssignment.seatId
-                    // Update passenger in viewmodel (we assume assignSeat exists)
-                    passengerViewModel.assignSeat(passengerId, seatId)
-                }
-
-                Toast.makeText(context, "Seats assigned successfully", Toast.LENGTH_SHORT).show()
-
-                // Navigate where you need (feedback or seat layout to show assigned seats)
-                navController.navigate("feedback")
-            } else {
-                val code = response.code()
-                val err = response.errorBody()?.string()
-                Toast.makeText(context, "Server error: $code", Toast.LENGTH_LONG).show()
-                Log.e("SeatCall", "Error $code, body=$err")
+            }
+        } catch (e: Exception) {
+            withContext(Dispatchers.Main) {
+                Toast.makeText(context, "Network Failure: ${e.message}", Toast.LENGTH_LONG).show()
+                Log.e("SmartBus", "Network Exception", e)
             }
         }
-
-        override fun onFailure(call: retrofit2.Call<SeatResponse>, t: Throwable) {
-            Toast.makeText(context, "Network failure: ${t.message}", Toast.LENGTH_LONG).show()
-            Log.e("SeatCall", "Failure", t)
-        }
-    })
+    }
 }
