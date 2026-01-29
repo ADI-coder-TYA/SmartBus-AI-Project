@@ -82,7 +82,7 @@ app.post('/allocations', async (req, res) => {
         const newBooking = new Booking(req.body);
         await newBooking.save();
 
-        res.json({ status: "stored", tripId: req.body.tripId });
+        res.json({ status: "stored", trip_id: req.body.tripId });
     } catch (err) {
         console.error("Save failed:", err);
         res.status(500).json({ status: "error" });
