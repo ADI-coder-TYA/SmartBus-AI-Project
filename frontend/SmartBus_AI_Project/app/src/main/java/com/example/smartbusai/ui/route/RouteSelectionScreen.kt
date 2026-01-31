@@ -21,8 +21,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -215,17 +213,21 @@ fun RouteFormCard(viewModel: SearchViewModel) {
             }
 
             // --- ADD STOP BUTTON ---
-            Row(modifier = Modifier
-                .fillMaxWidth()
-                .height(IntrinsicSize.Min)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(IntrinsicSize.Min)
+            ) {
                 Column(
                     modifier = Modifier.width(40.dp),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Box(modifier = Modifier
-                        .width(2.dp)
-                        .fillMaxHeight()
-                        .background(BorderGray))
+                    Box(
+                        modifier = Modifier
+                            .width(2.dp)
+                            .fillMaxHeight()
+                            .background(BorderGray)
+                    )
                 }
                 TextButton(
                     onClick = { viewModel.addIntermediateStop() },
@@ -272,13 +274,12 @@ fun TimelineInputItem(
     // Only show predictions if this specific field is focused and has text
     val showPredictions = isFocused && text.isNotEmpty() && predictions.isNotEmpty()
 
-    // Dynamic height adjustment for animation
-    val height = if (showPredictions) IntrinsicSize.Max else IntrinsicSize.Min
-
+    // Use IntrinsicSize.Min to ensure the connector line (Left Column) matches the Input height (Right Column)
+    // NOTE: Child components MUST NOT use Lazy layouts for this to work.
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .height(height)
+            .height(IntrinsicSize.Min)
     ) {
         // Left Side: Icon and Line
         Column(
@@ -296,17 +297,21 @@ fun TimelineInputItem(
                     .background(Color.White)
             )
             if (!isLast) {
-                Box(modifier = Modifier
-                    .width(2.dp)
-                    .weight(1f)
-                    .background(BorderGray))
+                Box(
+                    modifier = Modifier
+                        .width(2.dp)
+                        .weight(1f) // Fill remaining height
+                        .background(BorderGray)
+                )
             }
         }
 
         // Right Side: Input
-        Column(modifier = Modifier
-            .weight(1f)
-            .padding(bottom = 24.dp)) {
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .padding(bottom = 24.dp)
+        ) {
             AutoSuggestTextField(
                 value = text,
                 onValueChange = onTextChange,
@@ -369,6 +374,7 @@ fun AutoSuggestTextField(
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done)
         )
 
+        // Dropdown List
         AnimatedVisibility(
             visible = showSuggestions,
             enter = expandVertically() + fadeIn(),
@@ -383,8 +389,11 @@ fun AutoSuggestTextField(
                 shape = RoundedCornerShape(8.dp),
                 colors = CardDefaults.cardColors(containerColor = Color.White)
             ) {
-                LazyColumn {
-                    items(predictions) { prediction ->
+                // FIXED: Replaced LazyColumn with Column + verticalScroll to prevent crash with IntrinsicSize
+                Column(
+                    modifier = Modifier.verticalScroll(rememberScrollState())
+                ) {
+                    predictions.forEach { prediction ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

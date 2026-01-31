@@ -19,7 +19,7 @@ data class VehicleConfig(
 )
 
 data class PassengerApiRequest(
-    val id: String,
+    @SerializedName("passenger_id") val id: String,
     val pnr: String,
     val name: String,
     val age: Int,

@@ -139,8 +139,10 @@ class SearchViewModel @Inject constructor(
                     PlacesApiRetrofitClient.api.getAutocomplete(query, Constants.PLACES_API_KEY)
                 if (response.status == "OK") {
                     _predictions.value = response.predictions
+                    Log.i("SearchViewModel", "Search Results: ${_predictions.value}")
                 } else {
                     _predictions.value = emptyList()
+                    Log.e("SearchViewModel", "Response Error: ${response.status}, ${response.errorMessage}")
                 }
             } catch (e: Exception) {
                 Log.e("SearchViewModel", "Search Error", e)

@@ -1,8 +1,11 @@
 package com.example.smartbusai.placesAPI
 
+import com.google.gson.annotations.SerializedName
+
 data class GooglePlacesResponse(
     val predictions: List<Prediction>,
-    val status: String
+    val status: String,
+    @SerializedName("error_message") val errorMessage: String? = null
 )
 
 data class Prediction(
