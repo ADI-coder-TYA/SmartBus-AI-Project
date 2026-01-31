@@ -74,6 +74,65 @@ app.get('/histories/:passengerId', async (req, res) => {
     }
 });
 
+// AI calls this to download training data
+app.get('/feedback', async (req, res) => {
+    try {
+        console.log("Python AI requesting training data...");
+
+        // 1. Fetch all history records
+        const allHistory = await History.find({});
+
+        // 2. Format for "Seat Type" Model
+        // (Maps raw history to features needed for seat classification)
+        const seatTypeData = allHistory.map(h => {
+            // Reconstruct features based on what we saved.
+            // Note: Since History schema is simple, we might infer some defaults
+            // or you might need to enrich the History schema later.
+            // For now, we return basic features available.
+            return [
+                {
+                    "is_priority": 0, // Placeholder if not in DB
+                    "is_female": 0,   // Placeholder
+                    "is_in_group": 0, // Placeholder
+                    "age": 30,        // Placeholder default
+                    "norm_row": h.norm_row,
+                    "norm_col": h.norm_col,
+                    "disability": "None" // Placeholder
+                },
+                h.feedback_score >= 4 ? "Standard" : "Priority" // Infer label from score
+            ];
+        });
+
+        // 3. Format for "Penalty" Model
+        const penaltyData = allHistory.map(h => {
+            return [
+                {
+                    "is_priority": 0,
+                    "is_female": 0,
+                    "is_in_group": 0,
+                    "age": 30,
+                    "norm_row": h.norm_row,
+                    "norm_col": h.norm_col,
+                    "group_distance": 0,
+                    "disability": "None"
+                },
+                h.feedback_score // The target value
+            ];
+        });
+
+        // 4. Return the structure Python expects
+        res.json({
+            seattype: seatTypeData,
+            penalty: penaltyData
+        });
+
+    } catch (err) {
+        console.error("Failed to serve training data:", err);
+        // Return empty structure so Python falls back to synthetic data instead of crashing
+        res.json({ seattype: [], penalty: [] });
+    }
+});
+
 // AI calls this to SAVE the final allocation
 app.post('/allocations', async (req, res) => {
     try {
