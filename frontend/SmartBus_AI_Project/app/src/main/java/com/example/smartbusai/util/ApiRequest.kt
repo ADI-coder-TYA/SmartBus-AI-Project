@@ -65,6 +65,7 @@ data class SeatAssignment(
     val passengerId: String,
     val seatId: String,
     val groupDistance: Double?,
+    val groupId: String?,
     val seatType: String?,
     val explanation: String?
 ) {

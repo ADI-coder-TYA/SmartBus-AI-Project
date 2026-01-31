@@ -1,11 +1,14 @@
 package com.example.smartbusai.BackendAPIConnector
 
 import com.example.smartbusai.util.AllocationResponse
+import com.example.smartbusai.util.BookingHistoryItem
 import com.example.smartbusai.util.FeedbackRequest
 import com.example.smartbusai.util.SeatRequest
 import retrofit2.Response
 import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.POST
+import retrofit2.http.Path
 
 interface Api {
     // This points to the Node.js endpoint: app.post('/allocate', ...)
@@ -14,4 +17,8 @@ interface Api {
 
     @POST("feedback")
     suspend fun submitFeedback(@Body request: FeedbackRequest): Response<Void>
+
+    // Fetch ALL trips for the admin
+    @GET("bookings")
+    suspend fun getAllBookings(): Response<List<BookingHistoryItem>>
 }

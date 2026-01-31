@@ -9,11 +9,14 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.example.smartbusai.ui.FeedBack.FeedbackScreen
+import com.example.smartbusai.ui.bookings.BookingDetailsScreen
+import com.example.smartbusai.ui.bookings.MyBookingsScreen
 import com.example.smartbusai.ui.home.HomeScreen
 import com.example.smartbusai.ui.passengers.PassengerSelectionScreen
 import com.example.smartbusai.ui.passengers.SeatLayoutScreen
 import com.example.smartbusai.ui.passengers.VehicleTypeScreen
 import com.example.smartbusai.ui.route.RouteSelectionScreen
+import com.example.smartbusai.viewmodels.BookingViewModel
 import com.example.smartbusai.viewmodels.LayoutViewModel
 import com.example.smartbusai.viewmodels.PassengerViewModel
 import com.example.smartbusai.viewmodels.SearchViewModel
@@ -119,6 +122,22 @@ fun AppNavHost(
                     navController = navController,
                     layoutViewModel = layoutViewModel
                 )
+            }
+            composable("my_bookings") { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry("main_graph")
+                }
+                val bookingViewModel = hiltViewModel<BookingViewModel>(parentEntry)
+
+                MyBookingsScreen(navController, bookingViewModel)
+            }
+
+            composable("booking_details") { backStackEntry ->
+                val parentEntry = remember(backStackEntry) {
+                    navController.getBackStackEntry("main_graph")
+                }
+                val bookingViewModel = hiltViewModel<BookingViewModel>(parentEntry)
+                BookingDetailsScreen(navController, bookingViewModel)
             }
         }
     }

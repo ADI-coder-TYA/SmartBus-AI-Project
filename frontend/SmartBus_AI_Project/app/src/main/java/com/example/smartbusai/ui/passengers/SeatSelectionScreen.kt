@@ -297,7 +297,10 @@ fun SeatLayoutScreen(
             Spacer(Modifier.height(16.dp))
 
             Button(
-                onClick = { /* Finish Flow / Navigate Home */ },
+                onClick = {
+                    // Navigate to Feedback
+                    navController.navigate("feedback")
+                },
                 modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF0B1D39))
             ) {
@@ -375,56 +378,75 @@ fun SeatGrid(
     passengers: List<Passenger>,
     onSeatClick: (String) -> Unit
 ) {
-    // Dynamic Grid Calculation
+    // 1. Determine aisle position (middle of columns)
+    // Example: 4 cols -> indices 0,1 | 2 (AISLE) | 3,4. Total Visual Cols = 5.
+    val aisleColIndex = layout.cols / 2
+    val visualCols = layout.cols + 1
+
+    // 2. Calculate Total Visual Items required (Rows * VisualCols)
+    // This ensures the grid fills correctly including empty aisle spaces.
+    val totalVisualItems = layout.rows * visualCols
+
     LazyVerticalGrid(
-        columns = GridCells.Fixed(layout.cols + 1), // +1 for the aisle gap if needed, or simple logic
+        columns = GridCells.Fixed(visualCols),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        items(layout.rows * layout.cols) { index ->
-            val row = index / layout.cols
-            val col = index % layout.cols
+        items(totalVisualItems) { index ->
+            val row = index / visualCols
+            val visualCol = index % visualCols
 
-            // Reconstruct Label (Matches Backend Logic: 1A, 1B, 1C...)
-            val label = "${row + 1}${('A' + col)}"
+            if (visualCol == aisleColIndex) {
+                // RENDER AISLE GAP
+                // Aspect ratio 1f keeps it square so rows align perfectly
+                Spacer(modifier = Modifier.aspectRatio(1f))
+            } else {
+                // RENDER SEAT
+                // Map visual column to logical seat column (A, B, C, D...)
+                // If we are to the right of the aisle, subtract 1 from visual index
+                val logicalCol = if (visualCol < aisleColIndex) visualCol else visualCol - 1
 
-            // Check occupancy
-            val occupant = passengers.find { it.seatNumber == label }
-            val isOccupied = occupant != null
-            val isGroup = occupant?.groupId != "GRP-001" && occupant?.groupId != null
+                // Construct Label: 1A, 1B, 1C...
+                val label = "${row + 1}${('A' + logicalCol)}"
 
-            // Color Logic
-            val seatColor = when {
-                isGroup -> Color(0xFF2196F3) // Blue for groups
-                isOccupied -> Color(0xFF4CAF50) // Green for individuals
-                else -> Color(0xFFE0E0E0) // Gray for empty
-            }
+                // Check occupancy
+                val occupant = passengers.find { it.seatNumber == label }
+                val isOccupied = occupant != null
+                val isGroup = occupant?.groupId != "GRP-001" && occupant?.groupId != null
 
-            Box(
-                modifier = Modifier
-                    .aspectRatio(1f)
-                    .background(seatColor, RoundedCornerShape(8.dp))
-                    .clickable { if (isOccupied) onSeatClick(label) }
-                    .border(
-                        BorderStroke(1.dp, if (isOccupied) Color.Transparent else Color.LightGray),
-                        RoundedCornerShape(8.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        imageVector = Icons.Default.AirlineSeatReclineNormal,
-                        contentDescription = null,
-                        tint = if (isOccupied) Color.White else Color.Gray,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Text(
-                        text = label,
-                        fontSize = 10.sp,
-                        color = if (isOccupied) Color.White else Color.Black,
-                        fontWeight = FontWeight.Bold
-                    )
+                // Color Logic
+                val seatColor = when {
+                    isGroup -> Color(0xFF2196F3) // Blue
+                    isOccupied -> Color(0xFF4CAF50) // Green
+                    else -> Color(0xFFE0E0E0) // Gray
+                }
+
+                Box(
+                    modifier = Modifier
+                        .aspectRatio(1f)
+                        .background(seatColor, RoundedCornerShape(8.dp))
+                        .clickable { if (isOccupied) onSeatClick(label) }
+                        .border(
+                            BorderStroke(1.dp, if (isOccupied) Color.Transparent else Color.LightGray),
+                            RoundedCornerShape(8.dp)
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            imageVector = Icons.Default.AirlineSeatReclineNormal,
+                            contentDescription = null,
+                            tint = if (isOccupied) Color.White else Color.Gray,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Text(
+                            text = label,
+                            fontSize = 10.sp,
+                            color = if (isOccupied) Color.White else Color.Black,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
             }
         }

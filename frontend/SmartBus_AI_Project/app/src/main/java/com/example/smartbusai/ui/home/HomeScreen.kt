@@ -257,7 +257,9 @@ fun HomeScreen(
                         icon = Icons.Default.ConfirmationNumber,
                         color = goldenYellow,
                         modifier = Modifier.weight(1f),
-                        onClick = { /* Navigate to History */ }
+                        onClick = {
+                            navController.navigate("my_bookings")
+                        }
                     )
                 }
             }

@@ -56,6 +56,16 @@ app.post('/allocate', async (req, res) => {
     }
 });
 
+app.get('/bookings', async (req, res) => {
+    try {
+        const bookings = await Booking.find({}).sort({ createdAt: -1 });
+        res.json(bookings);
+    } catch (err) {
+        console.error("Fetch bookings failed:", err);
+        res.status(500).json([]);
+    }
+});
+
 
 // --- 2. Endpoints for Python AI Service (The "Callback" hooks) ---
 
