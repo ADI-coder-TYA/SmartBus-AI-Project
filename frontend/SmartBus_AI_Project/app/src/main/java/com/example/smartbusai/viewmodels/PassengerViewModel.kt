@@ -9,8 +9,8 @@ import com.example.smartbusai.util.FeedbackRequest
 import com.example.smartbusai.util.Passenger
 import com.example.smartbusai.util.SeatAssignment
 import com.example.smartbusai.util.SeatRequest
-import com.example.smartbusai.util.VehicleConfig
 import com.example.smartbusai.util.VehicleLayout
+import com.example.smartbusai.util.VehicleReq
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -86,6 +86,15 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
         _allocationStatus.value = null
     }
 
+    fun assignSeat(passengerId: String, seatNumber: String) {
+        val currentList = _passengers.value.toMutableList()
+        val index = currentList.indexOfFirst { it.id == passengerId }
+        if (index != -1) {
+            currentList[index] = currentList[index].copy(seatNumber = seatNumber)
+            _passengers.value = currentList
+        }
+    }
+
     // --- Backend Logic ---
 
     fun allocateSeats(layout: VehicleLayout) {
@@ -99,9 +108,15 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
                 // Convert UI model to API model
                 val apiPassengers = currentPassengers.map { it.toApiRequest(pnr) }
 
+                // FIXED: Using VehicleReq instead of VehicleConfig
+                // FIXED: Parameter name matches 'vehicle' in SeatRequest
                 val request = SeatRequest(
                     tripId = "TRIP-${System.currentTimeMillis()}",
-                    vehicleConfig = VehicleConfig(rows = layout.rows, cols = layout.cols),
+                    vehicle = VehicleReq(
+                        rows = layout.rows,
+                        cols = layout.cols,
+                        vehicleType = layout.vehicleType
+                    ),
                     passengers = apiPassengers
                 )
 
@@ -133,6 +148,7 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
                 it.passengerId == passenger.id || it.passengerId == passenger.id.take(8)
             }
             if (assignment != null) {
+                // FIXED: Use seatId from assignment (mapped to seatLabel in our data class helper)
                 passenger.copy(seatNumber = assignment.seatLabel)
             } else {
                 passenger
@@ -154,9 +170,9 @@ class PassengerViewModel @Inject constructor() : ViewModel() {
                 if (passenger.seatNumber != null) {
                     try {
                         val req = FeedbackRequest(
-                            passengerId = passenger.id, // The ID we generated earlier
+                            passengerId = passenger.id,
                             rating = rating,
-                            seatLabel = passenger.seatNumber,
+                            seatLabel = passenger.seatNumber!!,
                             totalRows = rows,
                             totalCols = cols
                         )

@@ -2,43 +2,47 @@ package com.example.smartbusai.util
 
 import com.google.gson.annotations.SerializedName
 
-// --- Request Models ---
+// --- Request Models (Strictly aligned with api.py) ---
 
 data class SeatRequest(
-    @SerializedName("trip_id") val tripId: String,
-    @SerializedName("vehicle_config") val vehicleConfig: VehicleConfig,
-    @SerializedName("passengers") val passengers: List<PassengerApiRequest>
+    // Python expects "tripId" (camelCase), NOT "trip_id"
+    val tripId: String?,
+
+    // Python expects "vehicle" (camelCase), NOT "vehicle_config"
+    val vehicle: VehicleReq,
+
+    // Python expects "passengers"
+    val passengers: List<PassengerApiRequest>,
+
+// Python expects "route" (Optional)
+val route: Map<String, Any> = emptyMap()
 )
 
-data class VehicleConfig(
-    val rows: Int = 10,
-    val cols: Int = 4,
-    @SerializedName("aisle_col") val aisleCol: Int = 2,
-    @SerializedName("seat_type_map") val seatTypeMap: Map<String, String> = emptyMap(),
-    @SerializedName("reserved_seats") val reservedSeats: List<String> = emptyList()
+data class VehicleReq(
+    val rows: Int,
+
+    // Python expects "columns", but we use "cols" in Kotlin
+    @SerializedName("columns") val cols: Int,
+
+    // Python expects "vehicleType"
+    val vehicleType: String = "AC Seater"
 )
 
 data class PassengerApiRequest(
-    @SerializedName("passenger_id") val id: String,
-    val pnr: String,
-    val name: String,
+    // Python expects "id", NOT "passenger_id"
+    val id: String,
+
+    val name: String?,
     val age: Int,
-    val gender: String, // "Male" or "Female"
-    @SerializedName("group_id") val groupId: String
-)
+    val gender: String,
+    val disability: String,
 
-// --- Response Models ---
+    // Python expects "groupId" (camelCase), NOT "group_id"
+    val groupId: String?,
 
-data class AllocationResponse(
-    @SerializedName("trip_id") val tripId: String,
-    val assignments: List<SeatAssignment>
-)
-
-data class SeatAssignment(
-    @SerializedName("passenger_id") val passengerId: String,
-    @SerializedName("seat_label") val seatLabel: String,
-    val row: Int,
-    val col: Int
+    // Python strictly requires Integers for stops
+    val pickupStopId: Int,
+    val dropStopId: Int
 )
 
 data class FeedbackRequest(
@@ -48,3 +52,23 @@ data class FeedbackRequest(
     val totalRows: Int,
     val totalCols: Int
 )
+
+// --- Response Models ---
+
+data class AllocationResponse(
+    val tripId: String,
+    val assignments: List<SeatAssignment>
+)
+
+data class SeatAssignment(
+    // Python response maps assignments by passenger ID
+    val passengerId: String,
+    val seatId: String,
+    val groupDistance: Double?,
+    val seatType: String?,
+    val explanation: String?
+) {
+    // Helper: Map 'seatId' (e.g., "1A") to 'seatLabel' for UI
+    val seatLabel: String
+        get() = seatId
+}

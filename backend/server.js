@@ -46,6 +46,7 @@ app.post('/allocate', async (req, res) => {
         const pythonResponse = await axios.post(`${PYTHON_SERVICE_URL}/allocate`, req.body);
 
         console.log("2. Got response from Python AI");
+        console.log(pythonResponse.data);
 
         // Return the AI's answer back to Android
         res.json(pythonResponse.data);
