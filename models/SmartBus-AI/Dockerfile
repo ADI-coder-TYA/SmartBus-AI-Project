@@ -20,4 +20,4 @@ ENV PORT=8000
 # --- THE FIX ---
 # We chain the training script AND the server start command.
 # This ensures models are generated every time the app deploys/restarts.
-CMD ["sh", "-c", "python models/train_global_models.py && uvicorn src.api:app --host 0.0.0.0 --port ${PORT}"]
+CMD ["sh", "-c", "python -m src.train_global_models && uvicorn src.api:app --host 0.0.0.0 --port ${PORT}"]
