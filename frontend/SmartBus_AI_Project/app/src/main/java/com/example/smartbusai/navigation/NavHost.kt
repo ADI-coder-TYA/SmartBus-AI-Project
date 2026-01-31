@@ -9,8 +9,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.navigation
 import androidx.navigation.compose.rememberNavController
 import com.example.smartbusai.ui.FeedBack.FeedbackScreen
-import com.example.smartbusai.ui.bookings.BookingDetailsScreen
-import com.example.smartbusai.ui.bookings.MyBookingsScreen
+import com.example.smartbusai.ui.history.BookingDetailsScreen
+import com.example.smartbusai.ui.history.MyBookingsScreen
 import com.example.smartbusai.ui.home.HomeScreen
 import com.example.smartbusai.ui.passengers.PassengerSelectionScreen
 import com.example.smartbusai.ui.passengers.SeatLayoutScreen

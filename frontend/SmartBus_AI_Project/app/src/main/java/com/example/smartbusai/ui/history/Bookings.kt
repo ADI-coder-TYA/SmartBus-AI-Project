@@ -1,4 +1,4 @@
-package com.example.smartbusai.ui.bookings
+package com.example.smartbusai.ui.history
 
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.BorderStroke
@@ -73,6 +73,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavController
 import com.example.smartbusai.util.BookingHistoryItem
+import com.example.smartbusai.util.SeatAssignment
 import com.example.smartbusai.viewmodels.BookingViewModel
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -431,7 +432,7 @@ fun BookingDetailsScreen(
 }
 
 @Composable
-fun PassengerManifestItem(assignment: com.example.smartbusai.util.SeatAssignment) {
+fun PassengerManifestItem(assignment: SeatAssignment) {
     val isPriority = assignment.seatType == "Priority"
 
     // Clean up explanation text
